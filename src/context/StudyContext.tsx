@@ -160,8 +160,11 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     try {
       const res = await fetch('/api/v1/user/profile', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fullName, avatarUrl })
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-user-email': user?.email || ''
+        },
+        body: JSON.stringify({ fullName, avatarUrl, email: user?.email })
       });
       const data = await res.json();
       if (data.success && data.user) {
@@ -184,11 +187,14 @@ export function StudyProvider({ children }: { children: ReactNode }) {
 
       const res = await fetch('/api/v1/user/upload-avatar', {
         method: 'POST',
+        headers: {
+          'x-user-email': user?.email || ''
+        },
         body: formData
       });
       const data = await res.json();
       if (data.success && data.avatarUrl) {
-        const updatedUser = { ...user, avatarUrl: data.avatarUrl };
+        const updatedUser = data.user || { ...user, avatarUrl: data.avatarUrl };
         setUser(updatedUser);
         localStorage.setItem('studymind_user_session', JSON.stringify(updatedUser));
         showToast("📷 Tải ảnh đại diện thành công!");

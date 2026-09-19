@@ -215,15 +215,29 @@ app.post('/api/v1/auth/login', (req, res) => {
   }
 });
 
+function getActiveUser(req) {
+  const reqEmail = req?.headers?.['x-user-email'] || req?.body?.email || req?.query?.email;
+  if (reqEmail && typeof reqEmail === 'string') {
+    const cleanEmail = reqEmail.trim().toLowerCase();
+    if (db.users.has(cleanEmail)) {
+      db.currentUser = db.users.get(cleanEmail);
+      return db.currentUser;
+    }
+  }
+  if (db.currentUser) return db.currentUser;
+  const allUsers = Array.from(db.users.values());
+  if (allUsers.length > 0) {
+    db.currentUser = allUsers[allUsers.length - 1];
+    return db.currentUser;
+  }
+  return db.user;
+}
+
 // Profile Update Endpoint
 app.post('/api/v1/user/profile', (req, res) => {
   try {
     const { fullName, avatarUrl } = req.body;
-
-    let targetUser = db.currentUser;
-    if (!targetUser) {
-      targetUser = db.users.get("demo@studymind.ai") || db.user;
-    }
+    const targetUser = getActiveUser(req);
 
     if (fullName && fullName.trim() !== '') {
       targetUser.fullName = fullName.trim();
@@ -252,16 +266,18 @@ app.post('/api/v1/user/upload-avatar', upload.single('avatar'), (req, res) => {
       return res.status(400).json({ success: false, error: "Không tìm thấy tệp ảnh tải lên." });
     }
     const avatarUrl = `/uploads/${req.file.filename}`;
+    const targetUser = getActiveUser(req);
 
-    if (db.currentUser) {
-      db.currentUser.avatarUrl = avatarUrl;
-      if (db.currentUser.email) {
-        db.users.set(db.currentUser.email.toLowerCase(), db.currentUser);
+    if (targetUser) {
+      targetUser.avatarUrl = avatarUrl;
+      if (targetUser.email) {
+        db.users.set(targetUser.email.toLowerCase(), targetUser);
       }
+      db.currentUser = targetUser;
       saveUsersToDisk();
     }
 
-    res.json({ success: true, avatarUrl, user: db.currentUser });
+    res.json({ success: true, avatarUrl, user: targetUser });
   } catch (err) {
     console.error("Upload avatar error:", err);
     res.status(500).json({ success: false, error: err.message });
@@ -269,12 +285,12 @@ app.post('/api/v1/user/upload-avatar', upload.single('avatar'), (req, res) => {
 });
 
 app.get('/api/v1/auth/me', (req, res) => {
-  const activeUser = db.currentUser || (db.users && db.users.get("demo@studymind.ai")) || db.user;
+  const activeUser = getActiveUser(req);
   res.json({ success: true, user: activeUser });
 });
 
 app.get('/api/v1/user/stats', (req, res) => {
-  const activeUser = db.currentUser || (db.users && db.users.get("demo@studymind.ai")) || db.user;
+  const activeUser = getActiveUser(req);
   res.json({
     success: true,
     data: {
