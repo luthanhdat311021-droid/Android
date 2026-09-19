@@ -1,0 +1,201 @@
+export interface User {
+  id?: string;
+  fullName: string;
+  email?: string;
+  membershipTier: string;
+  avatarUrl: string;
+  studyGoalHours?: number;
+  currentStudyHours?: number;
+  quizTargetCount?: number;
+  currentQuizCount?: number;
+  createdAt?: string;
+}
+
+export interface DocumentItem {
+  id: string;
+  title: string;
+  fileType: string;
+  fileSize?: string;
+  pageCount?: number;
+  duration?: string;
+  updatedAt: string;
+  status: 'UPLOADING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+  tags: string[];
+  rawText?: string;
+}
+
+export interface SpacedRepetitionItem {
+  id: string;
+  title: string;
+  memoryLevel: string;
+  actionNeeded: string;
+  buttonText: string;
+  docId: string;
+  lastReviewed?: string;
+}
+
+export interface Activity {
+  id: string;
+  text: string;
+  time: string;
+}
+
+export interface UserStats {
+  totalDocuments: number;
+  weeklyDocAdded: number;
+  flashcardProgress: string;
+  retentionRatePercentage: number;
+  averageQuizScore: string;
+  quizScoreDiff: string;
+  weeklyHours: { current: number; target: number };
+  weeklyQuizCount: { current: number; target: number };
+  recentDocuments: DocumentItem[];
+  spacedRepetitionItems: SpacedRepetitionItem[];
+  recentActivities: Activity[];
+}
+
+export interface NotesItem {
+  label: string;
+  text: string;
+}
+
+export interface NotesSection {
+  heading: string;
+  items: NotesItem[];
+}
+
+export interface AINotes {
+  summaryTitle: string;
+  sections: NotesSection[];
+}
+
+export type MindmapNodeType = 
+  | 'topic' 
+  | 'subtopic' 
+  | 'concept' 
+  | 'definition' 
+  | 'process' 
+  | 'method' 
+  | 'formula' 
+  | 'example' 
+  | 'fact' 
+  | 'comparison' 
+  | 'advantage' 
+  | 'disadvantage' 
+  | 'application' 
+  | 'warning' 
+  | 'important';
+
+export interface MindmapSource {
+  documentId?: string;
+  page?: number | null;
+  section?: string;
+  timestamp?: { start: number; end: number };
+}
+
+export interface MindmapNode {
+  id: string;
+  label: string;
+  shortLabel?: string;
+  type?: MindmapNodeType;
+  summary?: string;
+  detail?: string;
+  importance?: number; // 1 to 5
+  level?: number; // 0 (Root) to 6+
+  children?: string[];
+  subDetails?: string[];
+  parentId?: string | null;
+  source?: MindmapSource;
+  isCollapsed?: boolean;
+}
+
+export interface MindmapEdge {
+  id: string;
+  source: string;
+  target: string;
+  type: 'contains' | 'depends_on' | 'related_to' | 'causes' | 'produces' | 'example_of' | 'type_of' | 'contrasts_with' | 'prerequisite_of' | 'used_for';
+  label?: string;
+}
+
+export interface AIMindmap {
+  rootLabel?: string;
+  root?: MindmapNode;
+  nodes: MindmapNode[];
+  edges?: MindmapEdge[];
+  metadata?: {
+    totalNodes: number;
+    maxDepth: number;
+    nodeTypesCount?: Record<string, number>;
+  };
+}
+
+export interface Flashcard {
+  id: string;
+  front: string;
+  back: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  lastReviewed?: string | null;
+  nextReview?: string;
+}
+
+export interface QuizQuestion {
+  id: string;
+  questionNumber: number;
+  questionText: string;
+  options: string[];
+  correctIndex: number;
+  explanation: string;
+}
+
+export interface AIQuiz {
+  title: string;
+  subject: string;
+  timeLimitMinutes: number;
+  questions: QuizQuestion[];
+}
+
+export interface StudyPack {
+  notes?: AINotes | null;
+  mindmap?: AIMindmap | null;
+  flashcards?: Flashcard[];
+  quiz?: AIQuiz | null;
+}
+
+export interface ActiveDocumentData {
+  document: DocumentItem;
+  studyPack: StudyPack;
+}
+
+export interface OutputOptions {
+  notes: boolean;
+  mindmap: boolean;
+  flashcards: boolean;
+  quiz: boolean;
+}
+
+export interface QuizHistoryRecord {
+  id: string;
+  score: number;
+  correctCount: number;
+  totalQuestions: number;
+  completedAt: string;
+  feedback?: string;
+}
+
+export interface LessonHistoryItem {
+  id: string;
+  userId?: string;
+  title: string;
+  fileType: string;
+  fileSize?: string;
+  pageCount?: number;
+  duration?: string;
+  updatedAt: string;
+  status: 'UPLOADING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+  tags: string[];
+  rawText?: string;
+  studyPack?: StudyPack | null;
+  quizHistory?: QuizHistoryRecord[];
+}
+
+export type TabType = 'dashboard' | 'import' | 'workspace' | 'mindmap' | 'flashcard' | 'quiz' | 'history' | 'auth';

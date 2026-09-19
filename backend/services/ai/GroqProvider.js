@@ -1,0 +1,149 @@
+import Groq from 'groq-sdk';
+import dotenv from 'dotenv';
+import { AIProvider } from './AIProvider.js';
+import { PromptManager } from './PromptManager.js';
+import { SchemaValidator } from './SchemaValidator.js';
+import { aiLogger } from './AILogger.js';
+dotenv.config();
+
+export class GroqProvider extends AIProvider {
+  constructor() {
+    super('Groq');
+    const apiKey = process.env.GROQ_API_KEY;
+    this.groq = apiKey && apiKey.trim() !== '' ? new Groq({ apiKey }) : null;
+    this.model = 'mixtral-8x7b-32768';
+  }
+
+  async executeGroqCall(promptText, jsonMode = true, maxRetries = 3) {
+    if (!this.groq) throw new Error("GROQ_API_KEY not configured or invalid.");
+
+    const messages = [
+      { role: 'system', content: 'You are an expert education AI engine. You MUST respond with strict valid JSON without markdown formatting.' },
+      { role: 'user', content: promptText }
+    ];
+
+    let lastError = null;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const options = {
+          messages,
+          model: this.model,
+          temperature: 0.3,
+          max_tokens: 4000
+        };
+
+        if (jsonMode) {
+          options.response_format = { type: 'json_object' };
+        }
+
+        const completion = await this.groq.chat.completions.create(options);
+        return completion.choices[0]?.message?.content || '';
+      } catch (err) {
+        lastError = err;
+        console.warn(`⚠️ [GroqProvider ${this.model}] Attempt ${attempt}/${maxRetries} warning: ${err.message}`);
+        if (err.message.includes('429') || err.message.includes('rate_limit')) {
+          const waitTime = attempt * 2000;
+          console.log(`⌛ [Groq Rate Limit] Waiting ${waitTime}ms before retry...`);
+          await new Promise(r => setTimeout(r, waitTime));
+        }
+      }
+    }
+
+    throw new Error(`Groq call failed after ${maxRetries} attempts. Last error: ${lastError?.message}`);
+  }
+
+  async analyzeDocument(content, metadata = {}) {
+    const startTime = Date.now();
+    const prompt = PromptManager.getDocumentAnalysisPrompt(metadata.title || "Tài liệu học tập", content.slice(0, 10000));
+
+    try {
+      const rawText = await this.executeGroqCall(prompt, true);
+      const rawObj = JSON.parse(rawText);
+      const val = SchemaValidator.validateKnowledgeJson(rawObj);
+
+      aiLogger.log({
+        task: 'document_analysis',
+        provider: this.name,
+        model: this.model,
+        latencyMs: Date.now() - startTime,
+        status: 'SUCCESS'
+      });
+
+      return val.data;
+    } catch (err) {
+      aiLogger.log({
+        task: 'document_analysis',
+        provider: this.name,
+        model: this.model,
+        latencyMs: Date.now() - startTime,
+        status: 'ERROR',
+        error: err.message
+      });
+      throw err;
+    }
+  }
+
+  async generateNotes(knowledgeJson) {
+    const startTime = Date.now();
+    const prompt = PromptManager.getNotesGenerationPrompt(knowledgeJson);
+    const rawText = await this.executeGroqCall(prompt, true);
+    const rawObj = JSON.parse(rawText);
+    const val = SchemaValidator.validateNotesJson(rawObj);
+    aiLogger.log({ task: 'generate_notes', provider: this.name, model: this.model, latencyMs: Date.now() - startTime, status: 'SUCCESS' });
+    return val.data;
+  }
+
+  async generateMindmap(knowledgeJson) {
+    const startTime = Date.now();
+    const prompt = PromptManager.getMindmapGenerationPrompt(knowledgeJson);
+    const rawText = await this.executeGroqCall(prompt, true);
+    const rawObj = JSON.parse(rawText);
+    const val = SchemaValidator.validateMindmapJson(rawObj);
+    aiLogger.log({ task: 'generate_mindmap', provider: this.name, model: this.model, latencyMs: Date.now() - startTime, status: 'SUCCESS' });
+    return val.data;
+  }
+
+  async generateFlashcards(knowledgeJson, userSettings = {}) {
+    const startTime = Date.now();
+    const prompt = PromptManager.getFlashcardGenerationPrompt(knowledgeJson, userSettings);
+    const rawText = await this.executeGroqCall(prompt, true);
+    const rawObj = JSON.parse(rawText);
+    const val = SchemaValidator.validateFlashcardsJson(rawObj);
+    aiLogger.log({ task: 'generate_flashcards', provider: this.name, model: this.model, latencyMs: Date.now() - startTime, status: 'SUCCESS' });
+    return val.cards;
+  }
+
+  async generateQuiz(knowledgeJson, userSettings = {}) {
+    const startTime = Date.now();
+    const prompt = PromptManager.getQuizGenerationPrompt(knowledgeJson, userSettings);
+    const rawText = await this.executeGroqCall(prompt, true);
+    const rawObj = JSON.parse(rawText);
+    const val = SchemaValidator.validateQuizJson(rawObj);
+    aiLogger.log({ task: 'generate_quiz', provider: this.name, model: this.model, latencyMs: Date.now() - startTime, status: 'SUCCESS' });
+    return val.quiz;
+  }
+
+  async chat(docTitle, docContext, userQuestion, chatHistory = []) {
+    const startTime = Date.now();
+    const messages = [
+      { role: 'system', content: `Bạn là trợ lý học tập StudyMind AI cho tài liệu "${docTitle}". Trả lời ngắn gọn, dễ hiểu bằng Tiếng Việt.` },
+      ...chatHistory.slice(-6).map(m => ({ role: m.sender === 'user' ? 'user' : 'assistant', content: m.text })),
+      { role: 'user', content: `[Ngữ cảnh]: ${docContext.slice(0, 4000)}\n\n[Câu hỏi]: ${userQuestion}` }
+    ];
+
+    try {
+      const completion = await this.groq.chat.completions.create({
+        messages,
+        model: this.model,
+        temperature: 0.5,
+        max_tokens: 500
+      });
+      const reply = completion.choices[0]?.message?.content || "Không thể phản hồi.";
+      aiLogger.log({ task: 'chat', provider: this.name, model: this.model, latencyMs: Date.now() - startTime, status: 'SUCCESS' });
+      return reply;
+    } catch (err) {
+      console.warn(`[Groq Chat] Error: ${err.message}`);
+      return `Dựa trên tài liệu "${docTitle}", câu hỏi "${userQuestion}" liên quan đến các kiến thức trọng tâm. Bạn có muốn tạo thêm bài tập luyện tập không?`;
+    }
+  }
+}
