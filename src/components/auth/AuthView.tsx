@@ -84,20 +84,36 @@ export function AuthView() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-slate-100 flex items-center justify-center p-4 md:p-8 font-sans">
-      <div className="max-w-5xl w-full bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-200/80 grid grid-cols-1 lg:grid-cols-12 min-h-[640px]">
+    <div 
+      className="min-h-screen w-full flex items-center justify-center p-4 md:p-8 font-sans relative overflow-hidden"
+      style={{
+        backgroundImage: "url('/camo-pattern.png')",
+        backgroundRepeat: 'repeat',
+        backgroundSize: '240px 240px'
+      }}
+    >
+      {/* Dark Ambient Overlay over Camouflage Pattern */}
+      <div className="absolute inset-0 bg-slate-900/65 backdrop-blur-[3px] pointer-events-none" />
+
+      <div className="max-w-5xl w-full bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl overflow-hidden border border-slate-200/90 grid grid-cols-1 lg:grid-cols-12 min-h-[640px] relative z-10 animate-in fade-in zoom-in-95">
         
-        {/* Left Side: Brand & Feature Showcase (Teal Theme) */}
-        <div className="lg:col-span-5 bg-gradient-to-br from-[#0F766E] via-[#0D645E] to-[#115E59] p-8 md:p-10 text-white flex flex-col justify-between relative overflow-hidden">
-          
+        {/* Left Side: Brand & Feature Showcase (Camouflage Styled Hero Panel) */}
+        <div 
+          className="lg:col-span-5 bg-gradient-to-br from-[#0F766E]/95 via-[#0D645E]/95 to-[#115E59]/95 p-8 md:p-10 text-white flex flex-col justify-between relative overflow-hidden"
+          style={{
+            backgroundImage: "linear-gradient(to bottom right, rgba(15, 118, 110, 0.92), rgba(17, 94, 89, 0.95)), url('/camo-pattern.png')",
+            backgroundRepeat: 'repeat',
+            backgroundSize: '200px 200px'
+          }}
+        >
           {/* Ambient Glowing Orbs */}
-          <div className="absolute -top-16 -left-16 w-48 h-48 bg-teal-400/20 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute -bottom-20 -right-20 w-64 h-64 bg-emerald-400/15 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -top-16 -left-16 w-48 h-48 bg-teal-300/20 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-20 -right-20 w-64 h-64 bg-emerald-400/20 rounded-full blur-3xl pointer-events-none" />
 
           {/* Top Brand Logo */}
           <div className="relative z-10">
             <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center text-white border border-white/20 shadow-lg">
+              <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white border border-white/30 shadow-lg">
                 <BrainCircuit className="w-6 h-6" />
               </div>
               <div>
@@ -112,14 +128,14 @@ export function AuthView() {
 
             {/* Headline */}
             <div className="mt-8 space-y-3">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-teal-100 text-xs font-semibold backdrop-blur-sm border border-white/15">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 text-teal-100 text-xs font-semibold backdrop-blur-md border border-white/20 shadow-xs">
                 <Sparkles className="w-3.5 h-3.5 text-teal-300" />
                 Công nghệ AI Thế hệ Mới
               </span>
-              <h2 className="text-2xl md:text-3xl font-bold leading-tight text-white">
+              <h2 className="text-2xl md:text-3xl font-bold leading-tight text-white drop-shadow-xs">
                 Biến tài liệu dài thành kiến thức ghi nhớ nhanh
               </h2>
-              <p className="text-xs md:text-sm text-teal-100/80 leading-relaxed">
+              <p className="text-xs md:text-sm text-teal-100/90 leading-relaxed">
                 Tự động trích xuất Tóm tắt, Sơ đồ tư duy, Thẻ ghi nhớ và Bộ câu hỏi trắc nghiệm thông minh từ PDF, Video hoặc bài viết Web.
               </p>
             </div>
@@ -128,38 +144,38 @@ export function AuthView() {
           {/* Features List */}
           <div className="my-8 space-y-3.5 relative z-10">
             <div className="flex items-start gap-3">
-              <div className="p-1.5 rounded-lg bg-teal-400/20 text-teal-200 shrink-0 mt-0.5">
+              <div className="p-1.5 rounded-lg bg-white/15 backdrop-blur-md text-teal-200 shrink-0 mt-0.5 border border-white/10">
                 <Zap className="w-4 h-4" />
               </div>
               <div>
                 <h4 className="text-xs font-bold text-white">Xử lý siêu tốc với Groq LPU & Gemini 3.6</h4>
-                <p className="text-[11px] text-teal-100/70">Phân tích chuyên sâu văn bản & đa phương tiện chỉ trong vài giây.</p>
+                <p className="text-[11px] text-teal-100/80">Phân tích chuyên sâu văn bản & đa phương tiện chỉ trong vài giây.</p>
               </div>
             </div>
 
             <div className="flex items-start gap-3">
-              <div className="p-1.5 rounded-lg bg-teal-400/20 text-teal-200 shrink-0 mt-0.5">
+              <div className="p-1.5 rounded-lg bg-white/15 backdrop-blur-md text-teal-200 shrink-0 mt-0.5 border border-white/10">
                 <GitFork className="w-4 h-4" />
               </div>
               <div>
                 <h4 className="text-xs font-bold text-white">Tự động dựng Sơ đồ tư duy & Flashcards</h4>
-                <p className="text-[11px] text-teal-100/70">Dễ dàng ôn tập theo phương pháp Spaced Repetition khoa học.</p>
+                <p className="text-[11px] text-teal-100/80">Dễ dàng ôn tập theo phương pháp Spaced Repetition khoa học.</p>
               </div>
             </div>
 
             <div className="flex items-start gap-3">
-              <div className="p-1.5 rounded-lg bg-teal-400/20 text-teal-200 shrink-0 mt-0.5">
+              <div className="p-1.5 rounded-lg bg-white/15 backdrop-blur-md text-teal-200 shrink-0 mt-0.5 border border-white/10">
                 <ShieldCheck className="w-4 h-4" />
               </div>
               <div>
                 <h4 className="text-xs font-bold text-white">Đồng bộ đám mây với Supabase</h4>
-                <p className="text-[11px] text-teal-100/70">Lưu trữ dữ liệu học tập an toàn, truy cập mọi lúc mọi nơi.</p>
+                <p className="text-[11px] text-teal-100/80">Lưu trữ dữ liệu học tập an toàn, truy cập mọi lúc mọi nơi.</p>
               </div>
             </div>
           </div>
 
           {/* Bottom Back Button & Stats */}
-          <div className="pt-6 border-t border-white/10 flex items-center justify-between relative z-10">
+          <div className="pt-6 border-t border-white/20 flex items-center justify-between relative z-10">
             <button
               onClick={handleBackToApp}
               className="inline-flex items-center gap-2 text-xs font-bold text-teal-100 hover:text-white hover:underline transition-all"
@@ -168,7 +184,7 @@ export function AuthView() {
               <span>Quay lại ứng dụng</span>
             </button>
 
-            <div className="flex items-center gap-1.5 text-[11px] text-teal-200/90 font-medium">
+            <div className="flex items-center gap-1.5 text-[11px] text-teal-200/95 font-semibold">
               <Users className="w-3.5 h-3.5" />
               <span>10.000+ Học viên</span>
             </div>
@@ -176,7 +192,7 @@ export function AuthView() {
         </div>
 
         {/* Right Side: Form Area */}
-        <div className="lg:col-span-7 p-8 md:p-12 flex flex-col justify-center bg-white">
+        <div className="lg:col-span-7 p-8 md:p-12 flex flex-col justify-center bg-white/95">
           
           <div className="max-w-md mx-auto w-full space-y-6">
 
