@@ -87,13 +87,13 @@ export function AuthView() {
     <div 
       className="min-h-screen w-full flex items-center justify-center p-4 md:p-8 font-sans relative overflow-hidden"
       style={{
-        backgroundImage: "url('/camo-pattern.png')",
+        backgroundImage: "url('/clouds-pattern.png')",
         backgroundRepeat: 'repeat',
-        backgroundSize: '240px 240px'
+        backgroundPosition: 'top left'
       }}
     >
-      {/* Dark Ambient Overlay over Camouflage Pattern */}
-      <div className="absolute inset-0 bg-slate-900/65 backdrop-blur-[3px] pointer-events-none" />
+      {/* Dark Ambient Overlay over Stylized Clouds Pattern */}
+      <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] pointer-events-none" />
 
       <div className="max-w-5xl w-full bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl overflow-hidden border border-slate-200/90 grid grid-cols-1 lg:grid-cols-12 min-h-[640px] relative z-10 animate-in fade-in zoom-in-95">
         
