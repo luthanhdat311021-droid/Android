@@ -97,15 +97,8 @@ export function AuthView() {
 
       <div className="max-w-5xl w-full bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl overflow-hidden border border-slate-200/90 grid grid-cols-1 lg:grid-cols-12 min-h-[640px] relative z-10 animate-in fade-in zoom-in-95">
         
-        {/* Left Side: Brand & Feature Showcase (Camouflage Styled Hero Panel) */}
-        <div 
-          className="lg:col-span-5 bg-gradient-to-br from-[#0F766E]/95 via-[#0D645E]/95 to-[#115E59]/95 p-8 md:p-10 text-white flex flex-col justify-between relative overflow-hidden"
-          style={{
-            backgroundImage: "linear-gradient(to bottom right, rgba(15, 118, 110, 0.92), rgba(17, 94, 89, 0.95)), url('/camo-pattern.png')",
-            backgroundRepeat: 'repeat',
-            backgroundSize: '200px 200px'
-          }}
-        >
+        {/* Left Side: Brand & Feature Showcase (Clean Teal Hero Banner) */}
+        <div className="lg:col-span-5 bg-gradient-to-br from-[#0F766E] via-[#0D645E] to-[#115E59] p-8 md:p-10 text-white flex flex-col justify-between relative overflow-hidden">
           {/* Ambient Glowing Orbs */}
           <div className="absolute -top-16 -left-16 w-48 h-48 bg-teal-300/20 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute -bottom-20 -right-20 w-64 h-64 bg-emerald-400/20 rounded-full blur-3xl pointer-events-none" />
