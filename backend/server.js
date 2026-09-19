@@ -344,67 +344,79 @@ app.post('/api/v1/documents/upload', upload.single('file'), async (req, res) => 
 
 // Process Video
 app.post('/api/v1/documents/process-video', async (req, res) => {
-  const { videoUrl } = req.body;
-  const docTitle = videoUrl ? `Bài giảng Video (${videoUrl.slice(0, 25)}...)` : "Video học tập";
-  const transcript = await extractFromVideoUrlOrFile(videoUrl);
-  
-  const newDocId = `doc-${Date.now()}`;
-  const knowledgeBase = await aiRouter.analyzeDocument(transcript, { title: docTitle });
-  const notes = await aiRouter.generateNotes(knowledgeBase);
-  const mindmap = await aiRouter.generateMindmap(knowledgeBase);
-  const flashcards = await aiRouter.generateFlashcards(knowledgeBase);
-  const quiz = await aiRouter.generateQuiz(knowledgeBase);
+  try {
+    const { videoUrl } = req.body;
+    const extracted = await extractFromVideoUrlOrFile(videoUrl);
+    const rawText = typeof extracted === 'object' ? extracted.text : extracted;
+    const docTitle = typeof extracted === 'object' ? extracted.title : (videoUrl ? `Video (${videoUrl.slice(0, 25)}...)` : "Video học tập");
+    
+    const newDocId = `doc-${Date.now()}`;
+    const knowledgeBase = await aiRouter.analyzeDocument(rawText, { title: docTitle });
+    const notes = await aiRouter.generateNotes(knowledgeBase);
+    const mindmap = await aiRouter.generateMindmap(knowledgeBase);
+    const flashcards = await aiRouter.generateFlashcards(knowledgeBase);
+    const quiz = await aiRouter.generateQuiz(knowledgeBase);
 
-  const newDoc = {
-    id: newDocId,
-    title: docTitle,
-    fileType: 'VIDEO',
-    duration: '30 phút',
-    updatedAt: 'Vừa xong',
-    status: 'COMPLETED',
-    tags: ['Speech-to-Text'],
-    rawText: transcript
-  };
+    const newDoc = {
+      id: newDocId,
+      title: docTitle,
+      fileType: 'VIDEO',
+      duration: 'Phân tích tự động',
+      updatedAt: 'Vừa xong',
+      status: 'COMPLETED',
+      tags: ['YouTube Speech-to-Text'],
+      rawText: rawText
+    };
 
-  db.documents.unshift(newDoc);
-  db.studyPacks[newDocId] = { knowledgeBase, notes, mindmap, flashcards, quiz };
+    db.documents.unshift(newDoc);
+    db.studyPacks[newDocId] = { knowledgeBase, notes, mindmap, flashcards, quiz };
 
-  // Sync to Supabase Lesson History
-  await supabaseService.saveLessonHistory(newDoc, db.studyPacks[newDocId]);
+    // Sync to Supabase Lesson History
+    await supabaseService.saveLessonHistory(newDoc, db.studyPacks[newDocId]);
 
-  res.json({ success: true, document: newDoc, studyPack: db.studyPacks[newDocId] });
+    res.json({ success: true, document: newDoc, studyPack: db.studyPacks[newDocId] });
+  } catch (err) {
+    console.error("Process video error:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // Process Web URL
 app.post('/api/v1/documents/process-url', async (req, res) => {
-  const { url } = req.body;
-  const content = await extractFromWebUrl(url);
-  const docTitle = `Bài viết Web: ${url ? url.replace(/^https?:\/\//, '').slice(0, 25) : 'Nghiên cứu'}`;
-  
-  const newDocId = `doc-${Date.now()}`;
-  const knowledgeBase = await aiRouter.analyzeDocument(content, { title: docTitle });
-  const notes = await aiRouter.generateNotes(knowledgeBase);
-  const mindmap = await aiRouter.generateMindmap(knowledgeBase);
-  const flashcards = await aiRouter.generateFlashcards(knowledgeBase);
-  const quiz = await aiRouter.generateQuiz(knowledgeBase);
+  try {
+    const { url } = req.body;
+    const extracted = await extractFromWebUrl(url);
+    const rawText = typeof extracted === 'object' ? extracted.text : extracted;
+    const docTitle = typeof extracted === 'object' ? extracted.title : (url ? `Web (${url.slice(0, 25)}...)` : "Nghiên cứu Web");
+    
+    const newDocId = `doc-${Date.now()}`;
+    const knowledgeBase = await aiRouter.analyzeDocument(rawText, { title: docTitle });
+    const notes = await aiRouter.generateNotes(knowledgeBase);
+    const mindmap = await aiRouter.generateMindmap(knowledgeBase);
+    const flashcards = await aiRouter.generateFlashcards(knowledgeBase);
+    const quiz = await aiRouter.generateQuiz(knowledgeBase);
 
-  const newDoc = {
-    id: newDocId,
-    title: docTitle,
-    fileType: 'URL',
-    updatedAt: 'Vừa xong',
-    status: 'COMPLETED',
-    tags: ['Web Article'],
-    rawText: content
-  };
+    const newDoc = {
+      id: newDocId,
+      title: docTitle,
+      fileType: 'URL',
+      updatedAt: 'Vừa xong',
+      status: 'COMPLETED',
+      tags: ['Web Article Extractor'],
+      rawText: rawText
+    };
 
-  db.documents.unshift(newDoc);
-  db.studyPacks[newDocId] = { knowledgeBase, notes, mindmap, flashcards, quiz };
+    db.documents.unshift(newDoc);
+    db.studyPacks[newDocId] = { knowledgeBase, notes, mindmap, flashcards, quiz };
 
-  // Sync to Supabase Lesson History
-  await supabaseService.saveLessonHistory(newDoc, db.studyPacks[newDocId]);
+    // Sync to Supabase Lesson History
+    await supabaseService.saveLessonHistory(newDoc, db.studyPacks[newDocId]);
 
-  res.json({ success: true, document: newDoc, studyPack: db.studyPacks[newDocId] });
+    res.json({ success: true, document: newDoc, studyPack: db.studyPacks[newDocId] });
+  } catch (err) {
+    console.error("Process URL error:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // Admin AI Logs & Metrics Dashboard Endpoints

@@ -1,5 +1,12 @@
 // Document & Media Text Extraction Service for StudyMind AI
 
+export function extractYouTubeId(url) {
+  if (!url) return null;
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|shorts\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+  const match = url.match(regExp);
+  return (match && match[2].length === 11) ? match[2] : null;
+}
+
 export async function extractFromDocumentFile(file) {
   console.log(`[Text Extractor] Processing file upload: ${file.originalname} (${file.mimetype})`);
   
@@ -22,19 +29,197 @@ Chất nền (matrix) là khoảng không gian bên trong màng trong, chứa DN
 
 export async function extractFromVideoUrlOrFile(videoInput) {
   console.log(`[Text Extractor] Processing video input: ${videoInput}`);
-  return `
-[Transcript tự động từ Video/Audio - 00:00 đến 45:00]
-Chào mừng các bạn đến với bài giảng Cấu trúc màng sinh chất và Vận chuyển chất qua màng tế bào. Trong bài học hôm nay, chúng ta sẽ tìm hiểu 3 phần chính: 
-1. Cấu trúc khảm động của màng phospholipid kép.
-2. Vai trò chống thấm ion của lipid Cardiolipin và protein mang.
-3. Các phương thức vận chuyển thụ động, chủ động và xuất nhập bào.
-  `;
+
+  if (!videoInput || typeof videoInput !== 'string') {
+    return {
+      title: "Video Bài giảng",
+      text: "Không có URL video hợp lệ."
+    };
+  }
+
+  const youtubeId = extractYouTubeId(videoInput);
+
+  if (youtubeId) {
+    try {
+      console.log(`[Text Extractor] Detected YouTube Video ID: ${youtubeId}`);
+      
+      let videoTitle = "";
+      let author = "";
+      let description = "";
+      let transcriptText = "";
+
+      // 1. Fetch via YouTube Innertube API for player details & captions
+      try {
+        const innertubeRes = await fetch('https://www.youtube.com/youtubei/v1/player', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            videoId: youtubeId,
+            context: {
+              client: {
+                clientName: 'WEB',
+                clientVersion: '2.20240101.00.00',
+                hl: 'vi',
+                gl: 'VN'
+              }
+            }
+          })
+        });
+
+        if (innertubeRes.ok) {
+          const data = await innertubeRes.json();
+          videoTitle = data.videoDetails?.title || "";
+          author = data.videoDetails?.author || "";
+          description = data.videoDetails?.shortDescription || "";
+
+          const tracks = data.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+          if (tracks && tracks.length > 0) {
+            const chosenTrack = tracks.find(t => t.languageCode === 'vi' || t.languageCode?.startsWith('vi')) ||
+                                tracks.find(t => t.languageCode === 'en' || t.languageCode?.startsWith('en')) ||
+                                tracks[0];
+            
+            if (chosenTrack && chosenTrack.baseUrl) {
+              const xmlRes = await fetch(chosenTrack.baseUrl);
+              if (xmlRes.ok) {
+                const xmlText = await xmlRes.text();
+                const textMatches = [...xmlText.matchAll(/<text[^>]*>(.*?)<\/text>/g)];
+                const lines = textMatches.map(m => m[1]
+                  .replace(/&amp;/g, '&')
+                  .replace(/&lt;/g, '<')
+                  .replace(/&gt;/g, '>')
+                  .replace(/&quot;/g, '"')
+                  .replace(/&#39;/g, "'")
+                  .replace(/<[^>]+>/g, '')
+                  .trim()
+                ).filter(Boolean);
+                transcriptText = lines.join(' ');
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error("[Text Extractor] Innertube API error:", err.message);
+      }
+
+      // Fallback 2: oEmbed if title still missing
+      if (!videoTitle) {
+        try {
+          const oembedRes = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${youtubeId}&format=json`);
+          if (oembedRes.ok) {
+            const oembedData = await oembedRes.json();
+            videoTitle = oembedData.title || videoTitle;
+            author = oembedData.author_name || author;
+          }
+        } catch (e) {}
+      }
+
+      const finalTitle = videoTitle ? `Video: ${videoTitle}` : `Video YouTube (${youtubeId})`;
+
+      let content = `BÀI GIẢNG VIDEO YOUTUBE: ${videoTitle || youtubeId}\nKÊNH PHÁT HÀNH: ${author || 'YouTube'}\nURL: ${videoInput}\n\n`;
+
+      if (transcriptText) {
+        content += `TRANSCRIPT TỰ ĐỘNG TỪ YOUTUBE (SPEECH-TO-TEXT):\n${transcriptText}\n\n`;
+      }
+      
+      if (description) {
+        content += `MÔ TẢ CHI TIẾT VIDEO:\n${description}`;
+      } else if (!transcriptText) {
+        content += `Nội dung video YouTube: ${videoTitle || youtubeId}. Hãy phân tích chủ đề, kiến thức trọng tâm và tóm tắt theo tiêu đề bài giảng này.`;
+      }
+
+      return {
+        title: finalTitle,
+        text: content
+      };
+
+    } catch (err) {
+      console.error("[Text Extractor] Error processing YouTube video:", err);
+    }
+  }
+
+  // Fallback for non-YouTube video link or general video link: Try web scraping
+  return await extractFromWebUrl(videoInput);
 }
 
 export async function extractFromWebUrl(url) {
   console.log(`[Text Extractor] Scraping content from URL: ${url}`);
-  return `
-Bài báo khoa học: Tổng quan về Thuyết Nội Cộng Sinh và Sự Tiến Hóa của Bào Quan Sinh Năng Lượng.
-Trích lược nội dung: Khoảng 1.5 tỷ năm trước, tế bào nhân thực sơ khai đã thực bào vi khuẩn Alpha-proteobacteria hiếu khí. Sự hợp tác cộng sinh này qua thời gian dài đã hình thành nên ty thể hiện đại.
-  `;
+  
+  if (!url || typeof url !== 'string') {
+    return {
+      title: "Trang Web",
+      text: "Không có URL hợp lệ."
+    };
+  }
+
+  // Check if user accidentally pasted a YouTube URL in web URL tab
+  const youtubeId = extractYouTubeId(url);
+  if (youtubeId) {
+    return await extractFromVideoUrlOrFile(url);
+  }
+
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7'
+      }
+    });
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status} ${res.statusText}`);
+    }
+
+    const html = await res.text();
+
+    // Extract Title
+    const titleMatch = html.match(/<title[^>]*>(.*?)<\/title>/i) || html.match(/<meta\s+property="og:title"\s+content="([^"]*)"/i);
+    const pageTitle = titleMatch ? titleMatch[1].replace(/<[^>]+>/g, '').trim() : "Bài viết Web";
+
+    // Clean HTML
+    let cleaned = html
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, ' ')
+      .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ')
+      .replace(/<header\b[^<]*(?:(?!<\/header>)<[^<]*)*<\/header>/gi, ' ')
+      .replace(/<footer\b[^<]*(?:(?!<\/footer>)<[^<]*)*<\/footer>/gi, ' ')
+      .replace(/<nav\b[^<]*(?:(?!<\/nav>)<[^<]*)*<\/nav>/gi, ' ')
+      .replace(/<!--[\s\S]*?-->/g, ' ');
+
+    // Replace paragraph / line break tags with newlines
+    cleaned = cleaned
+      .replace(/<\/(p|div|h1|h2|h3|h4|h5|h6|li|tr)>/gi, '\n')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<[^>]+>/g, ' ');
+
+    // Decode HTML entities
+    let text = cleaned
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&amp;/gi, '&')
+      .replace(/&lt;/gi, '<')
+      .replace(/&gt;/gi, '>')
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;/gi, "'");
+
+    // Clean up whitespace
+    const lines = text
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 20);
+
+    const mainBody = lines.join('\n\n').slice(0, 12000);
+
+    const resultTitle = pageTitle ? `Bài viết: ${pageTitle.slice(0, 45)}` : "Tài liệu từ Web";
+    const resultText = `TIÊU ĐỀ TRANG WEB: ${pageTitle}\nNGUỒN TRUY CẬP: ${url}\n\nNỘI DUNG BÀI VIẾT TRÍCH XUẤT:\n${mainBody || "Nội dung bài viết từ " + url}`;
+
+    return {
+      title: resultTitle,
+      text: resultText
+    };
+
+  } catch (err) {
+    console.error(`[Text Extractor] Failed to scrape ${url}:`, err.message);
+    return {
+      title: `Trang Web (${url.slice(0, 25)})`,
+      text: `Nội dung từ đường dẫn liên kết: ${url}.\nHệ thống đã ghi nhận địa chỉ bài học này để AI tổng hợp các kiến thức liên quan.`
+    };
+  }
 }
