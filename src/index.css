@@ -11,9 +11,11 @@
   }
 
   body {
-    font-family: 'Figtree', system-ui, -apple-system, sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 15px; /* Tăng cỡ chữ tổng thể */
+    line-height: 1.6; /* Tạo khoảng cách thoáng giữa các dòng */
+    color: #1f2937; /* Màu chữ tối hơn (xám đậm/xám đen) thay vì xám nhạt */
     background-color: #F8FAFC;
-    color: #111827;
   }
 }
 
