@@ -11,7 +11,7 @@ export class GroqProvider extends AIProvider {
     super('Groq');
     const apiKey = process.env.GROQ_API_KEY;
     this.groq = apiKey && apiKey.trim() !== '' ? new Groq({ apiKey }) : null;
-    this.model = 'llama-3.3-70b-versatile';
+    this.model = 'llama3-8b-8192';
   }
 
   async executeGroqCall(promptText, jsonMode = true, maxRetries = 3) {

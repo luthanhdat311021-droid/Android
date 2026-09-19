@@ -49,10 +49,24 @@ const jobs = new Map();
 
 // In-Memory Database Store
 const db = {
+  users: new Map([
+    ["demo@studymind.ai", {
+      id: "usr-demo",
+      fullName: "Nguyễn Minh Trí",
+      email: "demo@studymind.ai",
+      membershipTier: "Premium",
+      avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+      studyGoalHours: 5.0,
+      currentStudyHours: 3.5,
+      quizTargetCount: 50,
+      currentQuizCount: 45
+    }]
+  ]),
+  currentUser: null,
   user: {
-    id: "usr-1",
+    id: "usr-demo",
     fullName: "Nguyễn Minh Trí",
-    email: "minhtri@studymind.ai",
+    email: "demo@studymind.ai",
     membershipTier: "Premium",
     avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
     studyGoalHours: 5.0,
@@ -125,15 +139,80 @@ app.get('/api/v1/health', (req, res) => {
   });
 });
 
+app.post('/api/v1/auth/signup', (req, res) => {
+  try {
+    const { fullName, email } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, error: "Vui lòng nhập địa chỉ Email." });
+    }
+    const cleanEmail = email.trim().toLowerCase();
+
+    if (!db.users) db.users = new Map();
+
+    // Check if user already exists
+    if (db.users.has(cleanEmail)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "Email này đã được đăng ký. Vui lòng chuyển sang tab 'Đăng nhập'!" 
+      });
+    }
+
+    const displayName = (fullName && fullName.trim() !== '') ? fullName.trim() : cleanEmail.split('@')[0];
+    
+    const newUser = {
+      id: `usr-${Date.now()}`,
+      fullName: displayName,
+      email: cleanEmail,
+      membershipTier: "Tài khoản Mới",
+      avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(displayName)}`,
+      studyGoalHours: 5.0,
+      currentStudyHours: 0,
+      quizTargetCount: 50,
+      currentQuizCount: 0
+    };
+
+    db.users.set(cleanEmail, newUser);
+    db.currentUser = newUser;
+
+    res.json({ success: true, token: `jwt-${Date.now()}`, user: newUser });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 app.post('/api/v1/auth/login', (req, res) => {
-  res.json({ success: true, token: "jwt-token-demo", user: db.user });
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, error: "Vui lòng nhập địa chỉ Email." });
+    }
+    const cleanEmail = email.trim().toLowerCase();
+
+    if (!db.users) db.users = new Map();
+    const user = db.users.get(cleanEmail);
+
+    // Require account to be registered first
+    if (!user) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "Tài khoản chưa tồn tại. Vui lòng chọn 'Đăng ký tài khoản' để tạo tài khoản mới!" 
+      });
+    }
+
+    db.currentUser = user;
+    res.json({ success: true, token: `jwt-${Date.now()}`, user });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 app.get('/api/v1/auth/me', (req, res) => {
-  res.json({ success: true, user: db.user });
+  const activeUser = db.currentUser || (db.users && db.users.get("demo@studymind.ai")) || db.user;
+  res.json({ success: true, user: activeUser });
 });
 
 app.get('/api/v1/user/stats', (req, res) => {
+  const activeUser = db.currentUser || (db.users && db.users.get("demo@studymind.ai")) || db.user;
   res.json({
     success: true,
     data: {
@@ -143,8 +222,8 @@ app.get('/api/v1/user/stats', (req, res) => {
       retentionRatePercentage: 78,
       averageQuizScore: "8.5/10",
       quizScoreDiff: "+0.4 điểm so với tháng trước",
-      weeklyHours: { current: db.user.currentStudyHours, target: db.user.studyGoalHours },
-      weeklyQuizCount: { current: db.user.currentQuizCount, target: db.user.quizTargetCount },
+      weeklyHours: { current: activeUser.currentStudyHours || 0, target: activeUser.studyGoalHours || 5.0 },
+      weeklyQuizCount: { current: activeUser.currentQuizCount || 0, target: activeUser.quizTargetCount || 50 },
       recentDocuments: db.documents,
       spacedRepetitionItems: db.spacedRepetition,
       recentActivities: db.activities

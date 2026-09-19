@@ -76,9 +76,9 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       try { return JSON.parse(saved); } catch (e) {}
     }
     return {
-      fullName: "Nguyễn Minh Trí",
-      email: "minhtri@studymind.ai",
-      membershipTier: "Premium",
+      fullName: "Học viên StudyMind",
+      email: "student@studymind.ai",
+      membershipTier: "Basic",
       avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80"
     };
   });

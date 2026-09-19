@@ -209,26 +209,36 @@ export function AuthView() {
                   : 'Đăng ký ngay để trải nghiệm đầy đủ các tính năng AI hỗ trợ học tập.'}
               </p>
 
-              {/* Mode Switch Pills */}
-              <div className="flex bg-slate-100 p-1.5 rounded-2xl mt-4 text-xs font-bold text-slate-600">
+              {/* Mode Switch Pills (100% Flush Border iOS Sliding Control) */}
+              <div className="relative flex p-0 bg-slate-200/80 backdrop-blur-md rounded-2xl mt-4 text-xs font-bold text-slate-600 border border-slate-300/80 shadow-inner overflow-hidden">
+                {/* 100% Flush Active Sliding Pill Background */}
+                <div 
+                  className={`absolute top-0 bottom-0 left-0 w-1/2 bg-white shadow-[0_2px_10px_rgba(0,0,0,0.1)] transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                    activeTabMode === 'login' ? 'translate-x-0' : 'translate-x-full'
+                  }`} 
+                />
+
+                {/* Tab 1: Đăng nhập */}
                 <button
                   type="button"
                   onClick={() => { setActiveTabMode('login'); setErrorMessage(null); }}
-                  className={`flex-1 py-2.5 rounded-xl transition-all ${
+                  className={`relative z-10 flex-1 py-3 text-center transition-colors duration-200 ${
                     activeTabMode === 'login' 
-                      ? 'bg-white text-[#0F766E] shadow-sm font-extrabold' 
-                      : 'hover:text-slate-900'
+                      ? 'text-[#0F766E] font-black' 
+                      : 'text-slate-500 hover:text-slate-900 font-semibold'
                   }`}
                 >
                   Đăng nhập
                 </button>
+
+                {/* Tab 2: Đăng ký tài khoản */}
                 <button
                   type="button"
                   onClick={() => { setActiveTabMode('signup'); setErrorMessage(null); }}
-                  className={`flex-1 py-2.5 rounded-xl transition-all ${
+                  className={`relative z-10 flex-1 py-3 text-center transition-colors duration-200 ${
                     activeTabMode === 'signup' 
-                      ? 'bg-white text-[#0F766E] shadow-sm font-extrabold' 
-                      : 'hover:text-slate-900'
+                      ? 'text-[#0F766E] font-black' 
+                      : 'text-slate-500 hover:text-slate-900 font-semibold'
                   }`}
                 >
                   Đăng ký tài khoản
