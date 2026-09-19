@@ -11,6 +11,7 @@ import { FlashcardView } from './components/flashcard/FlashcardView';
 import { QuizView } from './components/quiz/QuizView';
 import { HistoryView } from './components/history/HistoryView';
 import { AuthView } from './components/auth/AuthView';
+import { EditProfileModal } from './components/auth/EditProfileModal';
 import { Toast } from './components/common/Toast';
 
 class ErrorBoundary extends React.Component<
@@ -91,6 +92,9 @@ function MainLayout() {
 
       {/* Mobile Navigation Bar */}
       <MobileBottomBar />
+
+      {/* Profile Edit Modal */}
+      <EditProfileModal />
 
       {/* Toast Notification */}
       <Toast />

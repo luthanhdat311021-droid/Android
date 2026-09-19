@@ -1,0 +1,24 @@
+[
+  {
+    "id": "usr-demo",
+    "fullName": "Lữ Thành Đạt",
+    "email": "demo@studymind.ai",
+    "membershipTier": "Premium",
+    "avatarUrl": "https://scontent.fsgn21-1.fna.fbcdn.net/v/t39.30808-6/682217787_122208182432430225_7790219059080080387_n.jpg?stp=dst-jpg_tt6&cstp=mx960x960&ctp=s960x960&_nc_cat=106&_nc_map=urlgen_bucketless&ccb=1-7&_nc_sid=6ee11a&_nc_ohc=1LFfOUc8GOoQ7kNvwGVwCQ_&_nc_oc=Adp7SVZC-HJ22rUhq0QNwntLOzpIlfdi41nNdSUHN871I6h_3Peak9QbtUlzHZVwoJQ&_nc_zt=23&_nc_ht=scontent.fsgn21-1.fna&_nc_gid=3b_gUVcZRWT2EjUoQHtljQ&_nc_ss=7b2a8&oh=00_AQIkbTglXUI1ixQF8evEv-fd3f_ck4-FxNgNU2OG3uD0kQ&oe=6AB44AB4",
+    "studyGoalHours": 5,
+    "currentStudyHours": 3.5,
+    "quizTargetCount": 50,
+    "currentQuizCount": 45
+  },
+  {
+    "id": "usr-1789816389233",
+    "fullName": "Lữ Thành Đạt",
+    "email": "2424801030085@student.tdmu.edu.vn",
+    "membershipTier": "Tài khoản Mới",
+    "avatarUrl": "https://api.dicebear.com/7.x/avataaars/svg?seed=L%E1%BB%AF%20Th%C3%A0nh%20%C4%90%E1%BA%A1t",
+    "studyGoalHours": 5,
+    "currentStudyHours": 0,
+    "quizTargetCount": 50,
+    "currentQuizCount": 0
+  }
+]

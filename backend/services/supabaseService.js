@@ -18,50 +18,7 @@ export const supabase = isSupabaseConfigured
   : null;
 
 // In-Memory Fallback Storage when Supabase is not yet configured
-const memoryHistoryStore = new Map([
-  [
-    "doc-1",
-    {
-      id: "doc-1",
-      userId: "usr-1",
-      title: "Triết học Mác - Lênin & Quy luật Lượng - Chất",
-      fileType: "PDF",
-      fileSize: "2.4 MB",
-      pageCount: 15,
-      updatedAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-      status: "COMPLETED",
-      tags: ["Triết học", "Lý luận"],
-      rawText: "Ví dụ nguyên lý quy luật Lượng - Chất...",
-      studyPack: null,
-      quizHistory: [
-        {
-          id: "qhist-1",
-          score: 85,
-          correctCount: 17,
-          totalQuestions: 20,
-          completedAt: new Date(Date.now() - 3600000 * 5).toISOString(),
-          feedback: "Xuất sắc! Bạn đã nắm vững lý thuyết Lượng - Chất."
-        }
-      ]
-    }
-  ],
-  [
-    "doc-2",
-    {
-      id: "doc-2",
-      userId: "usr-1",
-      title: "Giải thuật Sắp xếp & Cấu trúc dữ liệu Cây",
-      fileType: "VIDEO",
-      duration: "14:30",
-      updatedAt: new Date(Date.now() - 3600000 * 24).toISOString(),
-      status: "COMPLETED",
-      tags: ["CNTT", "Cấu trúc dữ liệu"],
-      rawText: "Sắp xếp nhanh QuickSort có độ phức tạp O(n log n)...",
-      studyPack: null,
-      quizHistory: []
-    }
-  ]
-]);
+const memoryHistoryStore = new Map();
 
 export const supabaseService = {
   isConfigured() {

@@ -16,7 +16,7 @@ import { useStudy } from '../../context/StudyContext';
 import { TabType } from '../../types';
 
 export function Sidebar() {
-  const { activeTab, setActiveTab, user, isAuthenticated, openAuthModal, logout } = useStudy();
+  const { activeTab, setActiveTab, user, isAuthenticated, openAuthModal, openEditProfileModal, logout } = useStudy();
 
   const navItems: Array<{ id: TabType; label: string; icon: any }> = [
     { id: 'dashboard', label: 'Tổng quan', icon: LayoutDashboard },
@@ -72,15 +72,19 @@ export function Sidebar() {
       {/* User Bottom Widget */}
       <div className="p-4 border-t border-slate-100">
         {isAuthenticated ? (
-          <div className="bg-slate-50 hover:bg-slate-100/80 transition-colors p-3 rounded-xl flex items-center justify-between border border-slate-200/60">
-            <div className="flex items-center gap-3 overflow-hidden">
+          <div className="bg-slate-50 hover:bg-slate-100/80 transition-colors p-2.5 rounded-xl flex items-center justify-between border border-slate-200/60">
+            <button
+              onClick={openEditProfileModal}
+              className="flex items-center gap-2.5 overflow-hidden text-left group flex-1"
+              title="Chỉnh sửa hồ sơ"
+            >
               <img
                 src={user.avatarUrl}
                 alt={user.fullName}
-                className="w-9 h-9 rounded-full object-cover ring-2 ring-emerald-500/20 shrink-0"
+                className="w-9 h-9 rounded-full object-cover ring-2 ring-emerald-500/20 shrink-0 group-hover:scale-105 transition-transform"
               />
               <div className="overflow-hidden">
-                <p className="text-xs font-bold text-[#111827] truncate">
+                <p className="text-xs font-bold text-[#111827] group-hover:text-[#0F766E] transition-colors truncate">
                   {user.fullName}
                 </p>
                 <div className="flex items-center gap-1 text-[10px] text-[#0F766E] font-medium mt-0.5">
@@ -88,11 +92,11 @@ export function Sidebar() {
                   <span>{user.membershipTier || 'Premium'}</span>
                 </div>
               </div>
-            </div>
+            </button>
 
             <button
               onClick={logout}
-              className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors"
+              className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors shrink-0"
               title="Đăng xuất"
             >
               <LogOut className="w-4 h-4" />

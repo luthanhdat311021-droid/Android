@@ -47,9 +47,11 @@ const upload = multer({
 // Jobs Progress Memory Store
 const jobs = new Map();
 
-// In-Memory Database Store
-const db = {
-  users: new Map([
+// File Persistence Path for User Accounts
+const USERS_FILE_PATH = path.join(__dirname, 'users_db.json');
+
+function loadUsersFromDisk() {
+  const defaultMap = new Map([
     ["demo@studymind.ai", {
       id: "usr-demo",
       fullName: "Nguyễn Minh Trí",
@@ -61,7 +63,38 @@ const db = {
       quizTargetCount: 50,
       currentQuizCount: 45
     }]
-  ]),
+  ]);
+
+  try {
+    if (fs.existsSync(USERS_FILE_PATH)) {
+      const raw = fs.readFileSync(USERS_FILE_PATH, 'utf-8');
+      const list = JSON.parse(raw);
+      if (Array.isArray(list)) {
+        list.forEach(u => {
+          if (u && u.email) {
+            defaultMap.set(u.email.toLowerCase(), u);
+          }
+        });
+      }
+    }
+  } catch (err) {
+    console.error("Failed to load users_db.json:", err.message);
+  }
+  return defaultMap;
+}
+
+function saveUsersToDisk() {
+  try {
+    const list = Array.from(db.users.values());
+    fs.writeFileSync(USERS_FILE_PATH, JSON.stringify(list, null, 2), 'utf-8');
+  } catch (err) {
+    console.error("Failed to save users_db.json:", err.message);
+  }
+}
+
+// Database Store
+const db = {
+  users: loadUsersFromDisk(),
   currentUser: null,
   user: {
     id: "usr-demo",
@@ -74,52 +107,24 @@ const db = {
     quizTargetCount: 50,
     currentQuizCount: 45
   },
-  documents: [
-    {
-      id: "doc-1",
-      title: "Sinh học Tế bào - Ty thể và Hô hấp Tế bào",
-      fileType: "PDF",
-      fileSize: "1.8 MB",
-      pageCount: 12,
-      updatedAt: "2 giờ trước",
-      status: "COMPLETED",
-      tags: ["Mindmap", "40 Cards"],
-      rawText: `3. Cấu trúc siêu vi thể của Ty thể (Mitochondria)\n\nTy thể là một bào quan có màng kép bao bọc, đóng vai trò chính trong việc tạo năng lượng ATP cho tế bào hoạt động.\n\n"Màng trong gấp nếp sâu tạo thành các mào (cristae), nơi chứa chuỗi truyền electron để tổng hợp năng lượng."\n\nChất nền (matrix) là khoảng không gian bên trong màng trong, chứa DNA vòng của ty thể, ribosome 70S nhân sơ và các enzyme tham gia chu trình Krebs.`
-    }
-  ],
-  spacedRepetition: [
-    {
-      id: "sr-1",
-      title: "Thuyết tiến hóa nội cộng sinh (Ty thể)",
-      memoryLevel: "Yếu",
-      actionNeeded: "Cần ôn lại thẻ ghi nhớ",
-      buttonText: "Ôn ngay",
-      docId: "doc-1"
-    }
-  ],
-  activities: [
-    { id: "act-1", text: "Đã tạo Mindmap Sinh học tế bào", time: "Hôm nay • 09:30" }
-  ],
+  documents: [],
+  spacedRepetition: [],
+  activities: [],
   studyPacks: {}
 };
 
-// Initialize default Knowledge Base & StudyPack
+// Initialize default Knowledge Base & StudyPack if documents exist
 (async () => {
   try {
     const defaultDoc = db.documents[0];
-    const knowledgeBase = await aiRouter.analyzeDocument(defaultDoc.rawText, { title: defaultDoc.title });
-    const notes = await aiRouter.generateNotes(knowledgeBase);
-    const mindmap = await aiRouter.generateMindmap(knowledgeBase);
-    const flashcards = await aiRouter.generateFlashcards(knowledgeBase);
-    const quiz = await aiRouter.generateQuiz(knowledgeBase);
-
-    db.studyPacks["doc-1"] = {
-      knowledgeBase,
-      notes,
-      mindmap,
-      flashcards,
-      quiz
-    };
+    if (defaultDoc) {
+      const knowledgeBase = await aiRouter.analyzeDocument(defaultDoc.rawText, { title: defaultDoc.title });
+      const notes = await aiRouter.generateNotes(knowledgeBase);
+      const mindmap = await aiRouter.generateMindmap(knowledgeBase);
+      const flashcards = await aiRouter.generateFlashcards(knowledgeBase);
+      const quiz = await aiRouter.generateQuiz(knowledgeBase);
+      db.studyPacks[defaultDoc.id] = { knowledgeBase, notes, mindmap, flashcards, quiz };
+    }
   } catch (err) {
     console.warn("Initial StudyPack generation warning:", err.message);
   }
@@ -139,6 +144,9 @@ app.get('/api/v1/health', (req, res) => {
   });
 });
 
+// Serve uploaded files statically
+app.use('/uploads', express.static(uploadDir));
+
 app.post('/api/v1/auth/signup', (req, res) => {
   try {
     const { fullName, email } = req.body;
@@ -147,7 +155,7 @@ app.post('/api/v1/auth/signup', (req, res) => {
     }
     const cleanEmail = email.trim().toLowerCase();
 
-    if (!db.users) db.users = new Map();
+    db.users = loadUsersFromDisk();
 
     // Check if user already exists
     if (db.users.has(cleanEmail)) {
@@ -164,7 +172,7 @@ app.post('/api/v1/auth/signup', (req, res) => {
       fullName: displayName,
       email: cleanEmail,
       membershipTier: "Tài khoản Mới",
-      avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(displayName)}`,
+      avatarUrl: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80",
       studyGoalHours: 5.0,
       currentStudyHours: 0,
       quizTargetCount: 50,
@@ -173,6 +181,7 @@ app.post('/api/v1/auth/signup', (req, res) => {
 
     db.users.set(cleanEmail, newUser);
     db.currentUser = newUser;
+    saveUsersToDisk();
 
     res.json({ success: true, token: `jwt-${Date.now()}`, user: newUser });
   } catch (err) {
@@ -188,7 +197,7 @@ app.post('/api/v1/auth/login', (req, res) => {
     }
     const cleanEmail = email.trim().toLowerCase();
 
-    if (!db.users) db.users = new Map();
+    db.users = loadUsersFromDisk();
     const user = db.users.get(cleanEmail);
 
     // Require account to be registered first
@@ -202,6 +211,59 @@ app.post('/api/v1/auth/login', (req, res) => {
     db.currentUser = user;
     res.json({ success: true, token: `jwt-${Date.now()}`, user });
   } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Profile Update Endpoint
+app.post('/api/v1/user/profile', (req, res) => {
+  try {
+    const { fullName, avatarUrl } = req.body;
+
+    let targetUser = db.currentUser;
+    if (!targetUser) {
+      targetUser = db.users.get("demo@studymind.ai") || db.user;
+    }
+
+    if (fullName && fullName.trim() !== '') {
+      targetUser.fullName = fullName.trim();
+    }
+    if (avatarUrl && avatarUrl.trim() !== '') {
+      targetUser.avatarUrl = avatarUrl.trim();
+    }
+
+    if (targetUser.email) {
+      db.users.set(targetUser.email.toLowerCase(), targetUser);
+    }
+    db.currentUser = targetUser;
+    saveUsersToDisk();
+
+    res.json({ success: true, message: "Đã cập nhật hồ sơ cá nhân thành công!", user: targetUser });
+  } catch (err) {
+    console.error("Update profile error:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Upload Avatar File Endpoint
+app.post('/api/v1/user/upload-avatar', upload.single('avatar'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: "Không tìm thấy tệp ảnh tải lên." });
+    }
+    const avatarUrl = `/uploads/${req.file.filename}`;
+
+    if (db.currentUser) {
+      db.currentUser.avatarUrl = avatarUrl;
+      if (db.currentUser.email) {
+        db.users.set(db.currentUser.email.toLowerCase(), db.currentUser);
+      }
+      saveUsersToDisk();
+    }
+
+    res.json({ success: true, avatarUrl, user: db.currentUser });
+  } catch (err) {
+    console.error("Upload avatar error:", err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -236,35 +298,35 @@ app.get('/api/v1/documents', (req, res) => {
 });
 
 app.get('/api/v1/documents/:id', (req, res) => {
-  const doc = db.documents.find(d => d.id === req.params.id) || db.documents[0];
-  const studyPack = db.studyPacks[doc.id] || db.studyPacks["doc-1"];
+  const doc = db.documents.find(d => d.id === req.params.id) || db.documents[0] || null;
+  const studyPack = doc ? (db.studyPacks[doc.id] || null) : null;
   res.json({ success: true, document: doc, studyPack });
 });
 
 // Specified Standard AI Endpoints:
 app.get('/api/documents/:id/analysis', (req, res) => {
-  const pack = db.studyPacks[req.params.id] || db.studyPacks["doc-1"];
-  res.json({ success: true, knowledgeBase: pack.knowledgeBase });
+  const pack = db.studyPacks[req.params.id] || null;
+  res.json({ success: true, knowledgeBase: pack ? pack.knowledgeBase : null });
 });
 
 app.get('/api/documents/:id/notes', (req, res) => {
-  const pack = db.studyPacks[req.params.id] || db.studyPacks["doc-1"];
-  res.json({ success: true, notes: pack.notes });
+  const pack = db.studyPacks[req.params.id] || null;
+  res.json({ success: true, notes: pack ? pack.notes : null });
 });
 
 app.get('/api/documents/:id/mindmap', (req, res) => {
-  const pack = db.studyPacks[req.params.id] || db.studyPacks["doc-1"];
-  res.json({ success: true, mindmap: pack.mindmap });
+  const pack = db.studyPacks[req.params.id] || null;
+  res.json({ success: true, mindmap: pack ? pack.mindmap : null });
 });
 
 app.get('/api/documents/:id/flashcards', (req, res) => {
-  const pack = db.studyPacks[req.params.id] || db.studyPacks["doc-1"];
-  res.json({ success: true, flashcards: pack.flashcards });
+  const pack = db.studyPacks[req.params.id] || null;
+  res.json({ success: true, flashcards: pack ? pack.flashcards : [] });
 });
 
 app.get('/api/documents/:id/quiz', (req, res) => {
-  const pack = db.studyPacks[req.params.id] || db.studyPacks["doc-1"];
-  res.json({ success: true, quiz: pack.quiz });
+  const pack = db.studyPacks[req.params.id] || null;
+  res.json({ success: true, quiz: pack ? pack.quiz : null });
 });
 
 // Async Job Status Progress endpoint

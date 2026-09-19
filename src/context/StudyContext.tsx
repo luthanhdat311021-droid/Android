@@ -58,11 +58,16 @@ interface StudyContextType {
   isAuthenticated: boolean;
   isAuthModalOpen: boolean;
   authMode: 'login' | 'signup';
+  isEditProfileOpen: boolean;
   openAuthModal: (mode?: 'login' | 'signup') => void;
   closeAuthModal: () => void;
+  openEditProfileModal: () => void;
+  closeEditProfileModal: () => void;
   login: (email?: string, password?: string) => Promise<any>;
   signup: (fullName: string, email: string, password?: string) => Promise<any>;
   logout: () => Promise<void>;
+  updateUserProfile: (fullName: string, avatarUrl: string) => Promise<any>;
+  uploadAvatarFile: (file: File) => Promise<any>;
 }
 
 const StudyContext = createContext<StudyContextType | null>(null);
@@ -79,7 +84,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       fullName: "Học viên StudyMind",
       email: "student@studymind.ai",
       membershipTier: "Basic",
-      avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80"
+      avatarUrl: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80"
     };
   });
 
@@ -89,6 +94,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
+  const [isEditProfileOpen, setIsEditProfileOpen] = useState<boolean>(false);
 
   const openAuthModal = (mode: 'login' | 'signup' = 'login') => {
     setAuthMode(mode);
@@ -102,6 +108,9 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       setActiveTab('dashboard');
     }
   };
+
+  const openEditProfileModal = () => setIsEditProfileOpen(true);
+  const closeEditProfileModal = () => setIsEditProfileOpen(false);
 
   const login = async (email?: string, password?: string) => {
     try {
@@ -143,6 +152,51 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       return data;
     } catch (err: any) {
       console.error("Signup error:", err);
+      return { success: false, error: err.message };
+    }
+  };
+
+  const updateUserProfile = async (fullName: string, avatarUrl: string) => {
+    try {
+      const res = await fetch('/api/v1/user/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fullName, avatarUrl })
+      });
+      const data = await res.json();
+      if (data.success && data.user) {
+        setUser(data.user);
+        localStorage.setItem('studymind_user_session', JSON.stringify(data.user));
+        showToast("✨ Đã cập nhật hồ sơ cá nhân thành công!");
+      }
+      return data;
+    } catch (err: any) {
+      console.error("Update profile error:", err);
+      showToast("❌ Lỗi cập nhật hồ sơ!");
+      return { success: false, error: err.message };
+    }
+  };
+
+  const uploadAvatarFile = async (file: File) => {
+    try {
+      const formData = new FormData();
+      formData.append('avatar', file);
+
+      const res = await fetch('/api/v1/user/upload-avatar', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+      if (data.success && data.avatarUrl) {
+        const updatedUser = { ...user, avatarUrl: data.avatarUrl };
+        setUser(updatedUser);
+        localStorage.setItem('studymind_user_session', JSON.stringify(updatedUser));
+        showToast("📷 Tải ảnh đại diện thành công!");
+      }
+      return data;
+    } catch (err: any) {
+      console.error("Upload avatar error:", err);
+      showToast("❌ Lỗi tải ảnh đại diện!");
       return { success: false, error: err.message };
     }
   };
@@ -570,11 +624,16 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       isAuthenticated,
       isAuthModalOpen,
       authMode,
+      isEditProfileOpen,
       openAuthModal,
       closeAuthModal,
+      openEditProfileModal,
+      closeEditProfileModal,
       login,
       signup,
-      logout
+      logout,
+      updateUserProfile,
+      uploadAvatarFile
     }}>
       {children}
     </StudyContext.Provider>
