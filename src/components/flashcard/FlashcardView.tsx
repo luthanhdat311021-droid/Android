@@ -90,17 +90,15 @@ export function FlashcardView() {
           <button
             onClick={handleGenerateAIFlashcards}
             disabled={isGenerating}
-            className="bg-[#0F766E] hover:bg-[#0D5C53] text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-50"
+            className="bg-[#0F766E] hover:bg-[#0D5C53] text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-sm transition-all flex items-center justify-center disabled:opacity-50"
           >
-            <Sparkles className="w-4 h-4 text-amber-300" />
-            <span>{isGenerating ? "AI đang tạo 10-12 thẻ..." : "⚡ AI Sinh 10-12 Thẻ ghi nhớ"}</span>
+            <span>{isGenerating ? "Đang tạo 10-12 thẻ..." : "Tạo 10-12 Thẻ ghi nhớ"}</span>
           </button>
           <button
             onClick={() => setIsAddModalOpen(true)}
-            className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold px-3.5 py-2.5 rounded-xl shadow-2xs transition-all flex items-center gap-1.5"
+            className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold px-3.5 py-2.5 rounded-xl shadow-2xs transition-all flex items-center justify-center"
           >
-            <Plus className="w-4 h-4 text-[#0F766E]" />
-            <span>Tạo thẻ thủ công</span>
+            <span>Tạo thẻ mới</span>
           </button>
         </div>
       </div>

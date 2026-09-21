@@ -124,7 +124,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         setUser(data.user);
         setIsAuthenticated(true);
         localStorage.setItem('studymind_user_session', JSON.stringify(data.user));
-        showToast(`🎉 Chào mừng trở lại, ${data.user.fullName}!`);
+        showToast(`Chào mừng trở lại, ${data.user.fullName}!`);
         await fetchHistory();
       }
       return data;
@@ -146,7 +146,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         setUser(data.user);
         setIsAuthenticated(true);
         localStorage.setItem('studymind_user_session', JSON.stringify(data.user));
-        showToast(`✨ Tạo tài khoản thành công! Chào mừng ${data.user.fullName}!`);
+        showToast(`Tạo tài khoản thành công! Chào mừng ${data.user.fullName}!`);
         await fetchHistory();
       }
       return data;
@@ -170,12 +170,12 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       if (data.success && data.user) {
         setUser(data.user);
         localStorage.setItem('studymind_user_session', JSON.stringify(data.user));
-        showToast("✨ Đã cập nhật hồ sơ cá nhân thành công!");
+        showToast("Đã cập nhật hồ sơ cá nhân thành công!");
       }
       return data;
     } catch (err: any) {
       console.error("Update profile error:", err);
-      showToast("❌ Lỗi cập nhật hồ sơ!");
+      showToast("Lỗi cập nhật hồ sơ!");
       return { success: false, error: err.message };
     }
   };
@@ -197,12 +197,12 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         const updatedUser = data.user || { ...user, avatarUrl: data.avatarUrl };
         setUser(updatedUser);
         localStorage.setItem('studymind_user_session', JSON.stringify(updatedUser));
-        showToast("📷 Tải ảnh đại diện thành công!");
+        showToast("Tải ảnh đại diện thành công!");
       }
       return data;
     } catch (err: any) {
       console.error("Upload avatar error:", err);
-      showToast("❌ Lỗi tải ảnh đại diện!");
+      showToast("Lỗi tải ảnh đại diện!");
       return { success: false, error: err.message };
     }
   };
@@ -262,7 +262,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       const res = await fetch(`/api/v1/history/${id}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.success) {
-        showToast("🗑️ Đã xóa bài học khỏi lịch sử!");
+        showToast("Đã xóa bài học khỏi lịch sử!");
         await fetchHistory();
         await fetchDashboardStats();
       }
@@ -318,7 +318,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       const data = await res.json();
 
       if (data.success) {
-        showToast("🚀 Đã chuyển hóa tài liệu thành công!");
+        showToast("Đã chuyển hóa tài liệu thành công!");
         await fetchDashboardStats();
         await fetchHistory();
         setActiveDocData({ document: data.document, studyPack: data.studyPack });
@@ -328,7 +328,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       return data;
     } catch (err) {
       console.error("Upload document failed:", err);
-      showToast("❌ Lỗi tải tài liệu!");
+      showToast("Lỗi tải tài liệu!");
     }
   };
 
@@ -399,7 +399,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       });
       const data = await res.json();
       if (data.success) {
-        showToast(`✏️ Đã cập nhật nút sơ đồ tư duy!`);
+        showToast(`Đã cập nhật nút sơ đồ tư duy!`);
         await fetchDocumentDetail(activeDocId);
       }
     } catch (err) {
@@ -414,7 +414,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       });
       const data = await res.json();
       if (data.success) {
-        showToast(`🗑️ Đã xóa nút sơ đồ tư duy!`);
+        showToast(`Đã xóa nút sơ đồ tư duy!`);
         await fetchDocumentDetail(activeDocId);
       }
     } catch (err) {
@@ -432,7 +432,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       });
       const data = await res.json();
       if (data.success) {
-        showToast(`➕ Đã tạo thẻ ghi nhớ mới thành công!`);
+        showToast(`Đã tạo thẻ ghi nhớ mới thành công!`);
         await fetchDocumentDetail(activeDocId);
       }
     } catch (err) {
@@ -463,7 +463,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       });
       const data = await res.json();
       if (data.success) {
-        showToast(`🗑️ Đã xóa thẻ ghi nhớ!`);
+        showToast(`Đã xóa thẻ ghi nhớ!`);
         await fetchDocumentDetail(activeDocId);
       }
     } catch (err) {
@@ -524,7 +524,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
 
   const expandMindmapNodeAI = async (node: MindmapNode) => {
     try {
-      showToast(`🤖 AI đang mở rộng và phân tích sâu nút "${node.label}"...`);
+      showToast(`Đang mở rộng và phân tích sâu nút "${node.label}"...`);
       const res = await fetch(`/api/v1/documents/${activeDocId}/mindmap/expand`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -532,25 +532,27 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       });
       const data = await res.json();
       if (data.success) {
-        showToast(`✨ Đã đào sâu và tạo các nhánh con cho "${node.label}"!`);
+        showToast(`Đã đào sâu và tạo các nhánh con cho "${node.label}"!`);
         await fetchDocumentDetail(activeDocId);
       }
     } catch (err) {
       console.error("Expand mindmap node failed:", err);
-      showToast("⚠️ Không thể mở rộng nút bằng AI. Vui lòng thử lại.");
+      showToast("Không thể mở rộng nút. Vui lòng thử lại.");
     }
   };
 
   const regenerateQuizAI = async (docId?: string) => {
     const targetId = docId || activeDocId;
     try {
-      showToast("🤖 AI đang biên soạn 10-12 câu hỏi trắc nghiệm mới...");
+      showToast("Đang biên soạn 10-12 câu hỏi trắc nghiệm mới...");
       const res = await fetch(`/api/v1/documents/${targetId}/regenerate-quiz`, {
-        method: 'POST'
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
       });
       const data = await res.json();
       if (data.success && data.quiz) {
-        showToast("✨ Đã sinh mới 10-12 câu hỏi trắc nghiệm thành công!");
+        showToast("Đã sinh mới 10-12 câu hỏi trắc nghiệm thành công!");
         if (activeDocData) {
           setActiveDocData({
             ...activeDocData,
@@ -563,20 +565,22 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       }
     } catch (err) {
       console.error("Regenerate quiz failed:", err);
-      showToast("❌ Không thể tạo câu hỏi trắc nghiệm lúc này!");
+      showToast("Không thể tạo câu hỏi trắc nghiệm lúc này!");
     }
   };
 
   const regenerateFlashcardsAI = async (docId?: string) => {
     const targetId = docId || activeDocId;
     try {
-      showToast("🤖 AI đang khởi tạo 10-12 Thẻ ghi nhớ mới...");
+      showToast("Đang khởi tạo 10-12 Thẻ ghi nhớ mới...");
       const res = await fetch(`/api/v1/documents/${targetId}/regenerate-flashcards`, {
-        method: 'POST'
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
       });
       const data = await res.json();
       if (data.success && data.flashcards) {
-        showToast("✨ Đã sinh mới 10-12 Thẻ ghi nhớ thành công!");
+        showToast("Đã sinh mới 10-12 Thẻ ghi nhớ thành công!");
         if (activeDocData) {
           setActiveDocData({
             ...activeDocData,
@@ -589,7 +593,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       }
     } catch (err) {
       console.error("Regenerate flashcards failed:", err);
-      showToast("❌ Không thể tạo thẻ ghi nhớ lúc này!");
+      showToast("Không thể tạo thẻ ghi nhớ lúc này!");
     }
   };
 

@@ -308,13 +308,10 @@ export function ImportView() {
               {isProcessing ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Đang xử lý AI...</span>
+                  <span>Đang xử lý tài liệu...</span>
                 </>
               ) : (
-                <>
-                  <Sparkles className="w-4 h-4" />
-                  <span>Bắt đầu chuyển hóa tài liệu</span>
-                </>
+                <span>Bắt đầu chuyển hóa tài liệu</span>
               )}
             </button>
           </div>

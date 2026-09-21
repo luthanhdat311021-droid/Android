@@ -25,7 +25,7 @@ export function Sidebar() {
     { id: 'workspace', label: 'Không gian tài liệu', icon: BookOpen },
     { id: 'mindmap', label: 'Sơ đồ tư duy', icon: GitFork },
     { id: 'flashcard', label: 'Thẻ ghi nhớ', icon: Layers },
-    { id: 'quiz', label: 'Trắc nghiệm AI', icon: HelpCircle },
+    { id: 'quiz', label: 'Trắc nghiệm', icon: HelpCircle },
   ];
 
   return (
@@ -82,6 +82,9 @@ export function Sidebar() {
                 src={user.avatarUrl}
                 alt={user.fullName}
                 className="w-9 h-9 rounded-full object-cover ring-2 ring-emerald-500/20 shrink-0 group-hover:scale-105 transition-transform"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80";
+                }}
               />
               <div className="overflow-hidden">
                 <p className="text-xs font-bold text-[#111827] group-hover:text-[#0F766E] transition-colors truncate">

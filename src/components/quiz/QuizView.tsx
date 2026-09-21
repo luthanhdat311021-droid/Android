@@ -106,7 +106,7 @@ export function QuizView() {
     if (res) {
       setScoreResult(res);
       setIsSubmitted(true);
-      showToast(`🎉 Nộp bài thành công! Điểm của bạn: ${res.score}/100`);
+      showToast(`Nộp bài thành công! Điểm của bạn: ${res.score}/100`);
     }
   };
 
@@ -116,7 +116,7 @@ export function QuizView() {
     setScoreResult(null);
     setSecondsLeft(15 * 60);
     setCurrentQuestionIndex(0);
-    showToast("🔄 Đã reset bài làm trắc nghiệm thành công!");
+    showToast("Đã reset bài làm trắc nghiệm thành công!");
   };
 
   const handleSaveQuestion = async () => {
@@ -143,7 +143,7 @@ export function QuizView() {
         <div className="space-y-1">
           <h2 className="text-xl md:text-2xl font-bold text-[#111827] flex items-center gap-2">
             <HelpCircle className="w-5 h-5 text-[#0F766E]" />
-            <span>Luyện tập trắc nghiệm cùng AI</span>
+            <span>Luyện tập trắc nghiệm</span>
           </h2>
           <p className="text-xs md:text-sm text-slate-500">
             Môn học: <strong className="text-[#111827]">{quizData.subject}</strong>
@@ -154,23 +154,20 @@ export function QuizView() {
           <button
             onClick={handleGenerateAIQuiz}
             disabled={isGenerating}
-            className="bg-[#0F766E] hover:bg-[#0D5C53] text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-50"
+            className="bg-[#0F766E] hover:bg-[#0D5C53] text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-sm transition-all flex items-center justify-center disabled:opacity-50"
           >
-            <Sparkles className="w-4 h-4 text-amber-300" />
-            <span>{isGenerating ? "AI đang tạo 10-12 câu..." : "⚡ AI Sinh 10-12 câu hỏi"}</span>
+            <span>{isGenerating ? "Đang tạo 10-12 câu..." : "Tạo 10-12 câu hỏi"}</span>
           </button>
           <button
             onClick={handleRetake}
-            className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 shadow-2xs"
+            className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold px-3.5 py-2.5 rounded-xl flex items-center justify-center shadow-2xs"
           >
-            <RotateCcw className="w-3.5 h-3.5" />
             <span>Làm lại bài</span>
           </button>
           <button
             onClick={() => setIsAddModalOpen(true)}
-            className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 shadow-2xs"
+            className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold px-3.5 py-2.5 rounded-xl flex items-center justify-center shadow-2xs"
           >
-            <Plus className="w-4 h-4 text-[#0F766E]" />
             <span>Thêm câu hỏi</span>
           </button>
         </div>

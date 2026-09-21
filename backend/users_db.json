@@ -1,5 +1,16 @@
 [
   {
+    "id": "usr-demo",
+    "fullName": "Nguyễn Minh Trí",
+    "email": "demo@studymind.ai",
+    "membershipTier": "Premium",
+    "avatarUrl": "/uploads/1789967559359-778270573-Lab_Background.jpg",
+    "studyGoalHours": 5,
+    "currentStudyHours": 3.5,
+    "quizTargetCount": 50,
+    "currentQuizCount": 45
+  },
+  {
     "id": "usr-1789816389233",
     "fullName": "Lữ Thành Đạt",
     "email": "2424801030085@student.tdmu.edu.vn",

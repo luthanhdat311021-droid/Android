@@ -92,6 +92,18 @@ function saveUsersToDisk() {
   }
 }
 
+const defaultDoc1 = {
+  id: "doc-1",
+  title: "Sinh học Tế bào - Ty thể và Chu trình chuyển hóa",
+  fileType: "PDF",
+  fileSize: "2.4 MB",
+  pageCount: 15,
+  updatedAt: "Hôm nay",
+  status: "COMPLETED",
+  tags: ["Sinh học", "Tế bào", "Ty thể"],
+  rawText: "Ty thể (Mitochondria) là bào quan chuyển hóa năng lượng chính của tế bào nhân thực. Ty thể gồm 2 lớp màng: màng ngoài trơn nhẵn chứa protein porin, màng trong gấp nếp sâu tạo các mào (cristae) chứa phức hợp ATP Synthase và chuỗi truyền electron. Chất nền (matrix) của ty thể chứa ADN vòng kép trần và Ribosome 70S nhân sơ, chứng minh nguồn gốc nội cộng sinh."
+};
+
 // Database Store
 const db = {
   users: loadUsersFromDisk(),
@@ -107,7 +119,7 @@ const db = {
     quizTargetCount: 50,
     currentQuizCount: 45
   },
-  documents: [],
+  documents: [defaultDoc1],
   spacedRepetition: [],
   activities: [],
   studyPacks: {}
@@ -386,17 +398,19 @@ app.post('/api/ai/quiz', async (req, res) => {
 app.post('/api/v1/documents/:id/regenerate-quiz', async (req, res) => {
   try {
     const docId = req.params.id;
-    const { userSettings = {} } = req.body;
+    const { userSettings = {} } = req.body || {};
     const pack = db.studyPacks[docId] || db.studyPacks["doc-1"];
     let knowledgeBase = pack?.knowledgeBase;
     if (!knowledgeBase) {
-      const doc = db.documents.find(d => d.id === docId) || db.documents[0];
-      knowledgeBase = await aiRouter.analyzeDocument(doc.rawText || doc.title, { title: doc.title });
+      const doc = db.documents.find(d => d.id === docId) || db.documents[0] || defaultDoc1;
+      const docTitle = doc?.title || defaultDoc1.title;
+      const docText = doc?.rawText || defaultDoc1.rawText;
+      knowledgeBase = await aiRouter.analyzeDocument(docText, { title: docTitle });
     }
     const quiz = await aiRouter.generateQuiz(knowledgeBase, userSettings);
-    if (db.studyPacks[docId]) {
-      db.studyPacks[docId].quiz = quiz;
-    }
+    if (!db.studyPacks[docId]) db.studyPacks[docId] = {};
+    db.studyPacks[docId].quiz = quiz;
+    db.studyPacks[docId].knowledgeBase = knowledgeBase;
     res.json({ success: true, quiz });
   } catch (err) {
     console.error("Regenerate quiz error:", err);
@@ -407,17 +421,19 @@ app.post('/api/v1/documents/:id/regenerate-quiz', async (req, res) => {
 app.post('/api/v1/documents/:id/regenerate-flashcards', async (req, res) => {
   try {
     const docId = req.params.id;
-    const { userSettings = {} } = req.body;
+    const { userSettings = {} } = req.body || {};
     const pack = db.studyPacks[docId] || db.studyPacks["doc-1"];
     let knowledgeBase = pack?.knowledgeBase;
     if (!knowledgeBase) {
-      const doc = db.documents.find(d => d.id === docId) || db.documents[0];
-      knowledgeBase = await aiRouter.analyzeDocument(doc.rawText || doc.title, { title: doc.title });
+      const doc = db.documents.find(d => d.id === docId) || db.documents[0] || defaultDoc1;
+      const docTitle = doc?.title || defaultDoc1.title;
+      const docText = doc?.rawText || defaultDoc1.rawText;
+      knowledgeBase = await aiRouter.analyzeDocument(docText, { title: docTitle });
     }
     const flashcards = await aiRouter.generateFlashcards(knowledgeBase, userSettings);
-    if (db.studyPacks[docId]) {
-      db.studyPacks[docId].flashcards = flashcards;
-    }
+    if (!db.studyPacks[docId]) db.studyPacks[docId] = {};
+    db.studyPacks[docId].flashcards = flashcards;
+    db.studyPacks[docId].knowledgeBase = knowledgeBase;
     res.json({ success: true, flashcards });
   } catch (err) {
     console.error("Regenerate flashcards error:", err);

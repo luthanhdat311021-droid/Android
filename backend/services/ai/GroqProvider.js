@@ -11,10 +11,16 @@ export class GroqProvider extends AIProvider {
     super('Groq');
     const apiKey = process.env.GROQ_API_KEY;
     this.groq = apiKey && apiKey.trim() !== '' ? new Groq({ apiKey }) : null;
-    this.model = 'llama-3.3-70b-versatile';
+    this.models = [
+      'llama-3.3-70b-versatile',
+      'llama-3.1-8b-instant',
+      'gemma2-9b-it',
+      'deepseek-r1-distill-llama-70b'
+    ];
+    this.model = this.models[0];
   }
 
-  async executeGroqCall(promptText, jsonMode = true, maxRetries = 3) {
+  async executeGroqCall(promptText, jsonMode = true, maxRetries = 2) {
     if (!this.groq) throw new Error("GROQ_API_KEY not configured or invalid.");
 
     const messages = [
@@ -23,33 +29,38 @@ export class GroqProvider extends AIProvider {
     ];
 
     let lastError = null;
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const options = {
-          messages,
-          model: this.model,
-          temperature: 0.3,
-          max_tokens: 4000
-        };
+    for (const modelName of this.models) {
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          const options = {
+            messages,
+            model: modelName,
+            temperature: 0.3,
+            max_tokens: 4000
+          };
 
-        if (jsonMode) {
-          options.response_format = { type: 'json_object' };
-        }
+          if (jsonMode) {
+            options.response_format = { type: 'json_object' };
+          }
 
-        const completion = await this.groq.chat.completions.create(options);
-        return completion.choices[0]?.message?.content || '';
-      } catch (err) {
-        lastError = err;
-        console.warn(`⚠️ [GroqProvider ${this.model}] Attempt ${attempt}/${maxRetries} warning: ${err.message}`);
-        if (err.message.includes('429') || err.message.includes('rate_limit')) {
-          const waitTime = attempt * 2000;
-          console.log(`⌛ [Groq Rate Limit] Waiting ${waitTime}ms before retry...`);
-          await new Promise(r => setTimeout(r, waitTime));
+          const completion = await this.groq.chat.completions.create(options);
+          this.model = modelName;
+          return completion.choices[0]?.message?.content || '';
+        } catch (err) {
+          lastError = err;
+          console.warn(`⚠️ [GroqProvider ${modelName}] Attempt ${attempt}/${maxRetries} warning: ${err.message}`);
+          if (err.message.includes('404') || err.message.includes('model_not_found')) {
+            break;
+          }
+          if (err.message.includes('429') || err.message.includes('rate_limit')) {
+            const waitTime = attempt * 1000;
+            await new Promise(r => setTimeout(r, waitTime));
+          }
         }
       }
     }
 
-    throw new Error(`Groq call failed after ${maxRetries} attempts. Last error: ${lastError?.message}`);
+    throw new Error(`Groq call failed after trying models. Last error: ${lastError?.message}`);
   }
 
   async analyzeDocument(content, metadata = {}) {

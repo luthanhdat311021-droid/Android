@@ -4,11 +4,7 @@ import {
   ChevronRight, 
   Share2, 
   Download, 
-  PlusCircle, 
-  Lightbulb, 
-  GitFork, 
   Send, 
-  Bot, 
   Sparkles,
   RefreshCw,
   FileText
@@ -138,9 +134,9 @@ export function WorkspaceView() {
             <Download className="w-4 h-4" />
           </button>
           <button 
-            onClick={() => showToast("🔄 Đã làm mới phân tích AI cho tài liệu!")} 
+            onClick={() => showToast("Đã làm mới phân tích cho tài liệu!")} 
             className="p-1.5 hover:bg-slate-100 rounded text-slate-600" 
-            title="Làm mới AI"
+            title="Làm mới"
           >
             <RefreshCw className="w-4 h-4" />
           </button>
@@ -178,24 +174,21 @@ export function WorkspaceView() {
           <div className="pt-4 flex flex-wrap gap-2 border-t border-slate-100">
             <button
               onClick={handleQuickCreateFlashcard}
-              className="bg-slate-900 hover:bg-black text-white text-[11px] font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5 transition-all"
+              className="bg-slate-900 hover:bg-black text-white text-[11px] font-semibold px-3.5 py-1.5 rounded-full flex items-center gap-1.5 transition-all"
             >
-              <PlusCircle className="w-3.5 h-3.5 text-teal-400" />
-              <span>➕ Tạo Thẻ ghi nhớ</span>
+              <span>Tạo Thẻ ghi nhớ</span>
             </button>
             <button
               onClick={() => handleSendChat(`Giải thích thuật ngữ và công thức chính trong ${doc?.title}`)}
-              className="bg-slate-900 hover:bg-black text-white text-[11px] font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5 transition-all"
+              className="bg-slate-900 hover:bg-black text-white text-[11px] font-semibold px-3.5 py-1.5 rounded-full flex items-center gap-1.5 transition-all"
             >
-              <Lightbulb className="w-3.5 h-3.5 text-amber-400" />
-              <span>💡 Giải thích thuật ngữ</span>
+              <span>Giải thích thuật ngữ</span>
             </button>
             <button
               onClick={handleQuickCreateMindmap}
-              className="bg-slate-900 hover:bg-black text-white text-[11px] font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5 transition-all"
+              className="bg-slate-900 hover:bg-black text-white text-[11px] font-semibold px-3.5 py-1.5 rounded-full flex items-center gap-1.5 transition-all"
             >
-              <GitFork className="w-3.5 h-3.5 text-emerald-400" />
-              <span>🌿 Vẽ sơ đồ nhánh</span>
+              <span>Vẽ sơ đồ nhánh</span>
             </button>
           </div>
         </div>
@@ -256,9 +249,8 @@ export function WorkspaceView() {
         <div className="lg:col-span-4 bg-white flex flex-col justify-between p-5 h-full overflow-hidden">
           <div className="space-y-4 flex-1 overflow-y-auto pr-1">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="font-bold text-sm text-[#111827] flex items-center gap-2">
-                <Bot className="w-4 h-4 text-[#0F766E]" />
-                <span>Hỏi đáp cùng AI StudyMind</span>
+              <h3 className="font-bold text-sm text-[#111827]">
+                <span>Hỏi đáp học tập</span>
               </h3>
             </div>
 
@@ -270,8 +262,8 @@ export function WorkspaceView() {
                   className={`flex gap-2.5 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   {msg.sender === 'ai' && (
-                    <div className="w-7 h-7 rounded-full bg-[#0F766E] text-white flex items-center justify-center text-xs shrink-0 mt-0.5">
-                      <Bot className="w-4 h-4" />
+                    <div className="w-7 h-7 rounded-full bg-[#0F766E] text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">
+                      AI
                     </div>
                   )}
                   <div
@@ -288,8 +280,7 @@ export function WorkspaceView() {
 
               {isSending && (
                 <div className="flex gap-2 text-xs text-slate-400 items-center">
-                  <Bot className="w-4 h-4 animate-spin text-[#0F766E]" />
-                  <span>StudyMind AI đang suy nghĩ...</span>
+                  <span>Đang suy nghĩ...</span>
                 </div>
               )}
             </div>
@@ -300,7 +291,7 @@ export function WorkspaceView() {
                 onClick={() => handleSendChat(`Hãy tóm tắt ngắn gọn các công thức và khái niệm trọng tâm trong ${doc?.title}`)}
                 className="w-full text-left bg-teal-50 hover:bg-teal-100/70 border border-teal-200/60 p-2.5 rounded-xl text-[11px] text-[#0F766E] font-medium transition-colors"
               >
-                💡 "Hãy tóm tắt ngắn gọn các công thức và kiến thức trọng tâm..."
+                "Hãy tóm tắt ngắn gọn các công thức và kiến thức trọng tâm..."
               </button>
             </div>
           </div>

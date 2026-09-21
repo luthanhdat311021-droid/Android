@@ -22,10 +22,12 @@ import {
 import '@xyflow/react/dist/style.css';
 import dagre from '@dagrejs/dagre';
 
+import { toPng } from 'html-to-image';
 import { 
   GitFork, 
   Download, 
   Sparkles, 
+  Loader2,
   Plus, 
   Edit2, 
   Trash2, 
@@ -46,7 +48,6 @@ import {
   Filter,
   Maximize2,
   Minimize2,
-  Bot,
   Star,
   ExternalLink
 } from 'lucide-react';
@@ -124,7 +125,6 @@ function MindmapDeepNode({ id, data, selected }: NodeProps) {
 
   const nodeType = (data?.type as string) || 'concept';
   const meta = NODE_TYPE_META[nodeType] || NODE_TYPE_META.concept;
-  const IconComponent = meta.icon;
 
   const importance = (data?.importance as number) || 3;
   const isHighImportance = importance >= 4;
@@ -150,14 +150,12 @@ function MindmapDeepNode({ id, data, selected }: NodeProps) {
       <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
         <div className="flex items-center gap-1.5 overflow-hidden">
           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${meta.bg} ${meta.text}`}>
-            <IconComponent className="w-3 h-3" />
             <span className="truncate">{meta.label}</span>
           </span>
 
           {/* Importance Rating Stars */}
           {isHighImportance && (
             <span className="bg-amber-100 text-amber-800 text-[10px] font-extrabold px-1.5 py-0.5 rounded-md flex items-center gap-0.5 border border-amber-200">
-              <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
               <span>{importance}/5</span>
             </span>
           )}
@@ -171,10 +169,10 @@ function MindmapDeepNode({ id, data, selected }: NodeProps) {
                 e.stopPropagation();
                 onExpandAI({ id, label, summary, level: data?.level });
               }}
-              className="nodrag nopan p-1 hover:bg-teal-50 text-teal-700 rounded transition-colors"
-              title="AI Mở rộng đào sâu nhánh này"
+              className="nodrag nopan px-1.5 py-0.5 hover:bg-teal-50 text-teal-700 text-[10px] font-semibold rounded transition-colors"
+              title="Mở rộng đào sâu nhánh này"
             >
-              <Bot className="w-3.5 h-3.5" />
+              Mở rộng
             </button>
           )}
 
@@ -407,10 +405,65 @@ function MindmapFlowCanvas({
   onQuickDeleteNode,
   onExpandNodeAI,
   searchQuery,
-  filterType
+  filterType,
+  exportRef,
+  showToast
 }: any) {
   const reactFlowInstance = useReactFlow();
   const [collapsedNodeIds, setCollapsedNodeIds] = useState<Set<string>>(new Set());
+
+  // Export Mindmap Image Handler via html-to-image
+  useEffect(() => {
+    if (exportRef) {
+      exportRef.current = async () => {
+        const reactFlowEl = document.querySelector('.react-flow') as HTMLElement;
+        if (!reactFlowEl) {
+          showToast("Không tìm thấy khung sơ đồ tư duy.");
+          return;
+        }
+
+        try {
+          showToast("Đang chuẩn bị xuất ảnh HD...");
+
+          if (reactFlowInstance) {
+            reactFlowInstance.fitView({ padding: 0.2, duration: 200 });
+            await new Promise((res) => setTimeout(res, 350));
+          }
+
+          const dataUrl = await toPng(reactFlowEl, {
+            backgroundColor: '#F8FAFC',
+            pixelRatio: 2,
+            filter: (node: HTMLElement) => {
+              if (node?.classList) {
+                if (
+                  node.classList.contains('react-flow__minimap') ||
+                  node.classList.contains('react-flow__controls') ||
+                  node.classList.contains('react-flow__panel')
+                ) {
+                  return false;
+                }
+              }
+              return true;
+            },
+          });
+
+          const link = document.createElement('a');
+          const safeTitle = (rootLabel || 'mindmap').trim().replace(/[^a-zA-Z0-9_\u00C0-\u024F\u1E00-\u1EFF]/g, '_');
+          link.download = `Mindmap_${safeTitle}.png`;
+          link.href = dataUrl;
+          link.click();
+
+          showToast("Xuất sơ đồ tư duy dạng ảnh PNG thành công!");
+        } catch (err: any) {
+          console.error("Export mindmap image error:", err);
+          showToast(`Không thể xuất ảnh: ${err?.message || 'Lỗi xuất tệp'}`);
+        }
+      };
+    }
+    return () => {
+      if (exportRef) exportRef.current = null;
+    };
+  }, [reactFlowInstance, rootLabel, showToast, exportRef]);
 
   const nodeTypes = useMemo(() => ({
     rootNode: MindmapRootNode,
@@ -581,7 +634,7 @@ function MindmapFlowCanvas({
       
       <Panel position="top-left" className="bg-white/95 backdrop-blur-xs border border-slate-200 p-2 rounded-xl shadow-xs text-[11px] text-slate-600 font-medium flex items-center gap-1.5 max-w-[90vw]">
         <Sparkles className="w-3.5 h-3.5 text-[#0F766E] shrink-0" />
-        <span className="truncate">Chạm (+) tạo nhánh • Bấm Robot 🤖 AI mở rộng • 1 ngón kéo canvas</span>
+        <span className="truncate">Chạm (+) tạo nhánh • Bấm Mở rộng để phân tích • 1 ngón kéo canvas</span>
       </Panel>
     </ReactFlow>
   );
@@ -709,9 +762,25 @@ export function MindmapView() {
     }
   }, [deleteMindmapNode]);
 
+  // Track expanded node IDs
+  const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    setExpandedNodeIds(new Set());
+  }, [activeDocData?.document?.id]);
+
   const handleExpandNodeAI = useCallback(async (node: any) => {
+    if (!node || !node.id) return;
+
+    const hasChildren = rawNodesList.some((n) => n.parentId === node.id);
+    if (expandedNodeIds.has(node.id) || hasChildren) {
+      showToast(`Đã đào sâu và mở rộng nút "${node.label || 'này'}" rồi!`);
+      return;
+    }
+
+    setExpandedNodeIds((prev) => new Set(prev).add(node.id));
     await expandMindmapNodeAI(node);
-  }, [expandMindmapNodeAI]);
+  }, [expandedNodeIds, rawNodesList, expandMindmapNodeAI, showToast]);
 
   const selectedNodeObj = rawNodesList.find((n) => n.id === selectedNodeId) || {
     id: selectedNodeId,
@@ -767,7 +836,7 @@ export function MindmapView() {
 
   const handleDelete = async () => {
     if (selectedNodeId === 'root-node') {
-      showToast("⚠️ Không thể xóa nút gốc trung tâm!");
+      showToast("Không thể xóa nút gốc trung tâm!");
       return;
     }
     if (window.confirm(`Xóa nút "${selectedNodeObj.label}" khỏi sơ đồ tư duy?`)) {
@@ -775,8 +844,20 @@ export function MindmapView() {
     }
   };
 
-  const handleExportImage = () => {
-    showToast("🖼️ Đã xuất sơ đồ tư duy dạng ảnh PNG thành công!");
+  const exportRef = React.useRef<(() => Promise<void>) | null>(null);
+  const [isExporting, setIsExporting] = useState<boolean>(false);
+
+  const handleExportImage = async () => {
+    if (exportRef.current) {
+      setIsExporting(true);
+      try {
+        await exportRef.current();
+      } finally {
+        setIsExporting(false);
+      }
+    } else {
+      showToast("Sơ đồ tư duy chưa tải xong!");
+    }
   };
 
   return (
@@ -825,14 +906,14 @@ export function MindmapView() {
             onChange={(e) => setFilterType(e.target.value)}
             className="bg-slate-50 border border-slate-200 text-slate-700 text-xs font-semibold px-2.5 py-1.5 rounded-lg focus:outline-none focus:border-[#0F766E] shrink-0"
           >
-            <option value="all">🌐 Tất cả loại nút</option>
-            <option value="important">⭐ Mức quan trọng (4-5)</option>
-            <option value="subtopic">📁 Chủ đề con</option>
-            <option value="concept">💡 Khái niệm</option>
-            <option value="definition">📖 Định nghĩa</option>
-            <option value="formula">✨ Công thức</option>
-            <option value="process">🔄 Quy trình</option>
-            <option value="example">🌟 Ví dụ</option>
+            <option value="all">Tất cả loại nút</option>
+            <option value="important">Mức quan trọng (4-5)</option>
+            <option value="subtopic">Chủ đề con</option>
+            <option value="concept">Khái niệm</option>
+            <option value="definition">Định nghĩa</option>
+            <option value="formula">Công thức</option>
+            <option value="process">Quy trình</option>
+            <option value="example">Ví dụ</option>
           </select>
 
           {/* Quick Add Button */}
@@ -847,10 +928,15 @@ export function MindmapView() {
           {/* Export Image Button */}
           <button
             onClick={handleExportImage}
-            className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1 shrink-0 shadow-2xs"
+            disabled={isExporting}
+            className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1 shrink-0 shadow-2xs disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           >
-            <Download className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Xuất ảnh</span>
+            {isExporting ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0F766E]" />
+            ) : (
+              <Download className="w-3.5 h-3.5" />
+            )}
+            <span className="hidden sm:inline">{isExporting ? 'Đang xuất...' : 'Xuất ảnh'}</span>
           </button>
         </div>
       </div>
@@ -871,6 +957,8 @@ export function MindmapView() {
               onExpandNodeAI={handleExpandNodeAI}
               searchQuery={searchQuery}
               filterType={filterType}
+              exportRef={exportRef}
+              showToast={showToast}
             />
           </ReactFlowProvider>
         </div>
@@ -911,7 +999,6 @@ export function MindmapView() {
               Loại: {selectedNodeObj.type || 'Khái niệm'}
             </span>
             <span className="bg-amber-50 text-amber-800 border border-amber-200 text-[11px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1">
-              <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
               <span>Tầm quan trọng: {selectedNodeObj.importance || 3}/5</span>
             </span>
           </div>
@@ -944,10 +1031,9 @@ export function MindmapView() {
           <div className="space-y-2 pt-2 border-t border-slate-100">
             <button
               onClick={() => handleExpandNodeAI(selectedNodeObj)}
-              className="w-full bg-[#0F766E] hover:bg-[#0D5C53] text-white text-xs font-bold py-2.5 px-3 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2"
+              className="w-full bg-[#0F766E] hover:bg-[#0D5C53] text-white text-xs font-bold py-2.5 px-3 rounded-xl transition-all shadow-sm flex items-center justify-center"
             >
-              <Bot className="w-4 h-4 text-teal-200 animate-bounce" />
-              <span>🤖 AI Mở rộng & Đào sâu nút này</span>
+              <span>Mở rộng & Đào sâu nút này</span>
             </button>
 
             <div className="grid grid-cols-2 gap-2">
@@ -1006,13 +1092,13 @@ export function MindmapView() {
                     onChange={(e) => setNodeTypeInput(e.target.value as any)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-[#111827]"
                   >
-                    <option value="subtopic">📁 Chủ đề con</option>
-                    <option value="concept">💡 Khái niệm</option>
-                    <option value="definition">📖 Định nghĩa</option>
-                    <option value="formula">✨ Công thức</option>
-                    <option value="process">🔄 Quy trình</option>
-                    <option value="example">🌟 Ví dụ</option>
-                    <option value="application">🚀 Ứng dụng</option>
+                    <option value="subtopic">Chủ đề con</option>
+                    <option value="concept">Khái niệm</option>
+                    <option value="definition">Định nghĩa</option>
+                    <option value="formula">Công thức</option>
+                    <option value="process">Quy trình</option>
+                    <option value="example">Ví dụ</option>
+                    <option value="application">Ứng dụng</option>
                   </select>
                 </div>
 
@@ -1023,11 +1109,11 @@ export function MindmapView() {
                     onChange={(e) => setNodeImportanceInput(Number(e.target.value))}
                     className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-[#111827]"
                   >
-                    <option value={5}>⭐⭐⭐⭐⭐ (Cực kỳ quan trọng)</option>
-                    <option value={4}>⭐⭐⭐⭐ (Quan trọng)</option>
-                    <option value={3}>⭐⭐⭐ (Khái niệm chính)</option>
-                    <option value={2}>⭐⭐ (Kiến thức phụ)</option>
-                    <option value={1}>⭐ (Ví dụ / Chi tiết)</option>
+                    <option value={5}>Mức 5 (Cực kỳ quan trọng)</option>
+                    <option value={4}>Mức 4 (Quan trọng)</option>
+                    <option value={3}>Mức 3 (Khái niệm chính)</option>
+                    <option value={2}>Mức 2 (Kiến thức phụ)</option>
+                    <option value={1}>Mức 1 (Ví dụ / Chi tiết)</option>
                   </select>
                 </div>
               </div>

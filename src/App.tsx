@@ -36,7 +36,7 @@ class ErrorBoundary extends React.Component<
       return (
         <div className="p-8 max-w-xl mx-auto my-12 bg-white rounded-2xl border border-rose-200 shadow-xl space-y-4 text-center">
           <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto text-xl font-bold">
-            ⚠️
+            !
           </div>
           <h2 className="text-lg font-bold text-slate-900">Đã xảy ra lỗi giao diện</h2>
           <p className="text-xs text-rose-600 bg-rose-50 p-3 rounded-lg font-mono text-left overflow-x-auto">

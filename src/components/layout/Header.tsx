@@ -37,6 +37,9 @@ export function Header() {
                 src={user.avatarUrl}
                 alt={user.fullName}
                 className="w-8 h-8 md:w-9 md:h-9 rounded-full object-cover ring-2 ring-[#CCFBF1]"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80";
+                }}
               />
               <div className="hidden sm:block text-left">
                 <h4 className="text-xs md:text-sm font-semibold text-[#111827] leading-tight">
