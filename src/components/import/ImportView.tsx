@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   FileText, 
   Image as ImageIcon, 
@@ -10,11 +10,13 @@ import {
   X,
   Sparkles
 } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
+import mammoth from 'mammoth';
 import { useStudy } from '../../context/StudyContext';
 import { OutputOptions } from '../../types';
 
 export function ImportView() {
-  const { uploadDocument, processVideo, processUrl, activeDocData } = useStudy();
+  const { user, isAuthenticated, openAuthModal, uploadDocument, processVideo, processUrl, activeDocData, showToast } = useStudy();
 
   const [activeSourceTab, setActiveSourceTab] = useState<'doc' | 'image' | 'video' | 'url' | 'text'>('doc');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -35,6 +37,51 @@ export function ImportView() {
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [progressPercent, setProgressPercent] = useState<number>(65);
 
+  const [deviceType, setDeviceType] = useState<'mobile' | 'tablet' | 'desktop'>('desktop');
+
+  useEffect(() => {
+    const detectDevice = () => {
+      try {
+        if (Capacitor.isNativePlatform()) {
+          const platform = Capacitor.getPlatform();
+          if (platform === 'android' || platform === 'ios') {
+            setDeviceType('mobile');
+            return;
+          }
+        }
+      } catch {
+        // fallback
+      }
+
+      if (typeof window !== 'undefined') {
+        const ua = navigator.userAgent || navigator.vendor || (window as any).opera || '';
+        if (/(ipad|tablet|(android(?!.*mobile))|(windows(?!.*phone)(.*touch))|kindle|playbook|silk|(puffin(?!.*(IP|AP|WP))))/i.test(ua)) {
+          setDeviceType('tablet');
+        } else if (/Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua) || (window.innerWidth <= 768 && 'ontouchstart' in window)) {
+          setDeviceType('mobile');
+        } else {
+          setDeviceType('desktop');
+        }
+      }
+    };
+
+    detectDevice();
+    window.addEventListener('resize', detectDevice);
+    return () => window.removeEventListener('resize', detectDevice);
+  }, []);
+
+  const fileButtonText = deviceType === 'mobile'
+    ? 'Chọn tệp tin từ điện thoại'
+    : deviceType === 'tablet'
+      ? 'Chọn tệp tin từ máy tính bảng'
+      : 'Chọn tệp tin từ máy tính';
+
+  const dropZoneTitle = selectedFile 
+    ? selectedFile.name 
+    : deviceType === 'desktop' 
+      ? 'Kéo và thả tệp tin của bạn vào đây' 
+      : 'Chạm để tải lên hoặc chọn tệp tin';
+
   const sourceTabs = [
     { id: 'doc', label: 'PDF / Word / PPT', icon: FileText },
     { id: 'image', label: 'Ảnh / Ảnh chụp sách', icon: ImageIcon },
@@ -50,6 +97,23 @@ export function ImportView() {
   };
 
   const handleStartProcessing = async () => {
+    if (activeSourceTab === 'video' && !videoUrlInput.trim()) {
+      showToast("Vui lòng nhập đường dẫn Video / YouTube!");
+      return;
+    }
+    if (activeSourceTab === 'url' && !webUrlInput.trim()) {
+      showToast("Vui lòng nhập liên kết Web!");
+      return;
+    }
+    if (activeSourceTab === 'text' && !rawTextInput.trim()) {
+      showToast("Vui lòng dán hoặc nhập nội dung văn bản!");
+      return;
+    }
+    if ((activeSourceTab === 'doc' || activeSourceTab === 'image') && !selectedFile) {
+      showToast("Vui lòng chọn tệp tài liệu trước khi bấm chuyển hóa!");
+      return;
+    }
+
     setIsProcessing(true);
     setProgressPercent(10);
 
@@ -68,7 +132,92 @@ export function ImportView() {
         await processVideo(videoUrlInput);
       } else if (activeSourceTab === 'url') {
         await processUrl(webUrlInput);
-      } else {
+      } else if (activeSourceTab === 'text') {
+        await uploadDocument(null, language, depth, outputOptions, rawTextInput);
+      } else if (selectedFile) {
+        const ext = selectedFile.name.split('.').pop()?.toLowerCase();
+        
+        // 1. DOCX / DOC Files: Extract text client-side via mammoth to bypass 4.5MB Vercel upload limit
+        if (ext === 'docx' || ext === 'doc') {
+          try {
+            const arrayBuffer = await selectedFile.arrayBuffer();
+            const result = await mammoth.extractRawText({ arrayBuffer });
+            const extractedText = result.value ? result.value.trim() : '';
+            if (extractedText.length > 5) {
+              await uploadDocument(null, language, depth, outputOptions, extractedText, selectedFile.name);
+              return;
+            }
+          } catch (mErr) {
+            console.warn("Client mammoth extraction fallback:", mErr);
+          }
+        }
+
+        // 2. TXT / MD / CSV / JSON
+        if (['txt', 'md', 'csv', 'json'].includes(ext || '')) {
+          try {
+            const text = await selectedFile.text();
+            if (text.trim().length > 5) {
+              await uploadDocument(null, language, depth, outputOptions, text.trim(), selectedFile.name);
+              return;
+            }
+          } catch (tErr) {
+            console.warn("Client text read fallback:", tErr);
+          }
+        }
+
+        // 3. PDF Files: Extract text client-side via pdfjs-dist / stream decoder to bypass 4.5MB Vercel upload limit
+        if (ext === 'pdf') {
+          try {
+            const arrayBuffer = await selectedFile.arrayBuffer();
+            let extractedPdfText = '';
+
+            // Try PDF.js parsing
+            try {
+              const pdfjsLib = await import('pdfjs-dist');
+              pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version || '3.11.174'}/pdf.worker.min.mjs`;
+              const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) });
+              const pdfDoc = await loadingTask.promise;
+              let pagesText: string[] = [];
+              for (let i = 1; i <= pdfDoc.numPages; i++) {
+                const page = await pdfDoc.getPage(i);
+                const textContent = await page.getTextContent();
+                const pageStr = textContent.items.map((item: any) => item.str).join(' ');
+                if (pageStr.trim()) pagesText.push(pageStr);
+              }
+              extractedPdfText = pagesText.join('\n\n');
+            } catch (pErr) {
+              console.warn("Client pdfjs-dist extraction error, using stream fallback:", pErr);
+            }
+
+            // Binary Stream Fallback if PDF.js returns short text
+            if (extractedPdfText.trim().length <= 30) {
+              const bytes = new Uint8Array(arrayBuffer);
+              let binaryStr = '';
+              const len = Math.min(bytes.length, 5 * 1024 * 1024);
+              for (let i = 0; i < len; i++) {
+                binaryStr += String.fromCharCode(bytes[i]);
+              }
+              const matches = binaryStr.match(/\(([^\(\)]+)\)\s*T[jJ]/g) || binaryStr.match(/\/Title\s*\(([^\)]+)\)/g);
+              if (matches && matches.length > 0) {
+                extractedPdfText = matches.map(m => m.replace(/[\(\)\/Tj]/g, '').trim()).filter(t => t.length > 2).join(' ');
+              }
+            }
+
+            if (extractedPdfText.trim().length > 10) {
+              await uploadDocument(null, language, depth, outputOptions, extractedPdfText.trim(), selectedFile.name);
+              return;
+            }
+          } catch (pdfErr) {
+            console.warn("Client PDF extraction fallback:", pdfErr);
+          }
+        }
+
+        // 4. Image files or Fallback Binary Upload
+        if (selectedFile.size > 4.5 * 1024 * 1024) {
+          showToast(`Tệp "${selectedFile.name}" (${(selectedFile.size / (1024 * 1024)).toFixed(1)}MB) vượt quá giới hạn 4.5MB của Vercel Cloud. Vui lòng chọn tệp nhỏ hơn.`);
+          return;
+        }
+
         await uploadDocument(selectedFile, language, depth, outputOptions);
       }
     } finally {
@@ -89,6 +238,47 @@ export function ImportView() {
           Tải lên bất kỳ tài liệu nào để bắt đầu quá trình trích xuất kiến thức bằng AI
         </p>
       </div>
+
+      {/* Account Personalization Status Banner */}
+      {isAuthenticated ? (
+        <div className="bg-teal-50/70 border border-teal-200/80 rounded-2xl p-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-[#0F766E] text-white flex items-center justify-center shrink-0">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-teal-900">
+                Kho học tập cá nhân của <span>{user.fullName || user.email}</span>
+              </p>
+              <p className="text-[11px] text-teal-700/80">
+                Bài học, ghi chú AI, sơ đồ tư duy và flashcard sau khi tạo sẽ được đồng bộ vĩnh viễn trên Supabase Cloud.
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-amber-50/80 border border-amber-200/80 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-amber-900">
+                Bạn đang ở chế độ Khách (Chưa đăng nhập)
+              </p>
+              <p className="text-[11px] text-amber-700/90">
+                Bạn có thể trải nghiệm chuyển hóa tài liệu, nhưng hãy đăng nhập để lưu trữ vĩnh viễn vào tài khoản cá nhân.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => openAuthModal('login')}
+            className="px-4 py-2 bg-[#0F766E] hover:bg-[#0D645E] text-white text-xs font-bold rounded-xl shadow-xs shrink-0 self-start sm:self-auto cursor-pointer"
+          >
+            Đăng nhập ngay
+          </button>
+        </div>
+      )}
 
       {/* Top Source Tabs Pills */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-slate-200 scrollbar-none">
@@ -124,7 +314,7 @@ export function ImportView() {
               </div>
               <div className="space-y-1">
                 <h4 className="font-bold text-base text-[#111827]">
-                  {selectedFile ? selectedFile.name : 'Kéo và thả tệp tin của bạn vào đây'}
+                  {dropZoneTitle}
                 </h4>
                 <p className="text-xs text-slate-500">
                   Hỗ trợ PDF, DOCX, PPTX, JPG/PNG lên tới 50MB
@@ -133,7 +323,7 @@ export function ImportView() {
 
               <div>
                 <label className="inline-block bg-[#0F766E] hover:bg-[#0D5C53] text-white font-bold text-xs px-5 py-2.5 rounded-lg shadow-sm cursor-pointer transition-all hover:scale-102">
-                  <span>Chọn tệp tin từ máy tính</span>
+                  <span>{fileButtonText}</span>
                   <input
                     type="file"
                     onChange={handleFileChange}

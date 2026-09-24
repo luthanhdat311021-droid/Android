@@ -14,6 +14,7 @@ export class GroqProvider extends AIProvider {
     this.models = [
       'llama-3.3-70b-versatile',
       'llama-3.1-8b-instant',
+      'mixtral-8x7b-32768',
       'gemma2-9b-it',
       'deepseek-r1-distill-llama-70b'
     ];
@@ -49,14 +50,13 @@ export class GroqProvider extends AIProvider {
         } catch (err) {
           lastError = err;
           console.warn(`⚠️ [GroqProvider ${modelName}] Attempt ${attempt}/${maxRetries} warning: ${err.message}`);
-          if (err.message.includes('404') || err.message.includes('model_not_found')) {
+          if (err.message.includes('404') || err.message.includes('model_not_found') || err.message.includes('429') || err.message.includes('rate_limit') || err.message.includes('401') || err.message.includes('invalid_api_key')) {
             break;
           }
-          if (err.message.includes('429') || err.message.includes('rate_limit')) {
-            const waitTime = attempt * 1000;
-            await new Promise(r => setTimeout(r, waitTime));
-          }
         }
+      }
+      if (lastError?.message?.includes('401') || lastError?.message?.includes('invalid_api_key')) {
+        break;
       }
     }
 
@@ -156,5 +156,14 @@ export class GroqProvider extends AIProvider {
       console.warn(`[Groq Chat] Error: ${err.message}`);
       return `Dựa trên tài liệu "${docTitle}", câu hỏi "${userQuestion}" liên quan đến các kiến thức trọng tâm. Bạn có muốn tạo thêm bài tập luyện tập không?`;
     }
+  }
+
+  async analyzeFusion(documents) {
+    const startTime = Date.now();
+    const prompt = PromptManager.getKnowledgeFusionPrompt(documents);
+    const rawText = await this.executeGroqCall(prompt, true);
+    const rawObj = JSON.parse(rawText);
+    aiLogger.log({ task: 'knowledge_fusion', provider: this.name, model: this.model, latencyMs: Date.now() - startTime, status: 'SUCCESS' });
+    return rawObj;
   }
 }

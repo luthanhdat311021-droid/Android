@@ -6,7 +6,8 @@ import {
   GitFork, 
   Layers, 
   HelpCircle,
-  History
+  History,
+  GitCompare
 } from 'lucide-react';
 import { useStudy } from '../../context/StudyContext';
 import { TabType } from '../../types';

@@ -8,7 +8,8 @@ export const PROMPT_VERSIONS = {
   MINDMAP_GENERATION: "MINDMAP_GENERATION_V1",
   FLASHCARD_GENERATION: "FLASHCARD_GENERATION_V1",
   QUIZ_GENERATION: "QUIZ_GENERATION_V1",
-  CHAT_ASSISTANT: "CHAT_ASSISTANT_V1"
+  CHAT_ASSISTANT: "CHAT_ASSISTANT_V1",
+  KNOWLEDGE_FUSION: "KNOWLEDGE_FUSION_V2"
 };
 
 export class PromptManager {
@@ -393,6 +394,100 @@ Output MUST be a valid JSON object:
       "difficulty": "medium"
     }
   ]
+}
+`;
+  }
+
+  static getKnowledgeFusionPrompt(documents) {
+    const formattedDocs = documents.map((doc, idx) => {
+      const note = doc.studyPack?.note || doc.studyPack?.notes || {};
+      const keyConcepts = Array.isArray(note.keyConcepts)
+        ? note.keyConcepts.map(c => `- ${c.term}: ${c.definition}`).join('\n')
+        : '';
+      const sections = Array.isArray(note.sections)
+        ? note.sections.map(s => `+ [${s.heading}]: ${(s.points || s.keyPoints || []).join('; ')}`).join('\n')
+        : '';
+      const flashcards = Array.isArray(doc.studyPack?.flashcards)
+        ? doc.studyPack.flashcards.slice(0, 6).map(f => `* Hỏi: ${f.question} -> Đáp: ${f.answer}`).join('\n')
+        : '';
+
+      return `
+--- TÀI LIỆU #${idx + 1}: ${doc.title} ---
+ID: ${doc.id}
+Chủ đề / Thẻ: ${(doc.tags || []).join(', ')}
+Tóm tắt nội dung:
+${note.summary || doc.rawText || doc.summary || "Không có tóm tắt chi tiết"}
+
+Hệ thống Khái niệm Trọng tâm (Key Concepts):
+${keyConcepts || "Không có danh sách khái niệm"}
+
+Các Mục chính & Điểm cốt lõi (Sections):
+${sections || "Không có mục chi tiết"}
+
+Trích dẫn Thẻ ghi nhớ / Trắc nghiệm tiêu biểu:
+${flashcards || "Không có thẻ ghi nhớ"}
+`;
+    }).join('\n\n');
+
+    return `
+You are an expert multi-document educational synthesis & knowledge fusion AI engine.
+Your goal is to perform deep cross-analysis across the provided learning documents.
+DO NOT provide generic filler, placeholder text, or shallow summaries. Produce an academically rigorous, highly substantive synthesis.
+
+Analyze the documents below:
+${formattedDocs}
+
+Tasks:
+1. "unifiedSummary": Write a comprehensive, multi-paragraph executive summary (in Vietnamese) synthesizing how the concepts across all documents interlock, complement, or contrast with each other. Mention specific terminology from both documents.
+2. "commonConcepts": Identify 3-5 core shared concepts or interdisciplinary bridges:
+   - If documents share the same subject: identify true conceptual overlaps and shared scientific or structural principles.
+   - If documents belong to different disciplines (e.g. English grammar vs Chemistry/Biology/Physics): identify deep structural, cognitive, or taxonomic parallels (e.g. Two-dimensional Matrix Taxonomy: 12 Tenses matrix vs Periodic Table matrix; Symbolic Syntax Conventions; Bilingual STEM Terminology Bridge connecting English terms to scientific definitions; Causality & Conditionality Rules).
+   For each concept:
+   - "concept": Academic title of the concept (in Vietnamese)
+   - "definition": Clear, substantive synthesized definition with real examples and explanations (in Vietnamese, at least 2-3 sentences)
+   - "sources": Array of document titles that contain or connect to this concept
+3. "uniqueInsights": For EACH document provided, extract 3-4 specific unique details, formulas, procedural steps, or exclusive rules that appear in that document:
+   - "docId": Document ID
+   - "docTitle": Document Title
+   - "insights": Array of strings (in Vietnamese, containing real terminology and formulas)
+4. "conflicts": Identify 2-3 factual, numerical, or perspective discrepancies / contradictions / cognitive pitfalls (e.g. symbolic ambiguity between subjects like 'S' for Subject vs 'S' for Sulfur; artificial grammar conventions with exceptions vs immutable natural laws; reversible vs irreversible processes). For each conflict:
+   - "id": "conf-1", "conf-2", etc.
+   - "topic": Clear, specific topic of disagreement or potential confusion (in Vietnamese)
+   - "docA": { "id": docIdA, "title": docTitleA, "statement": "Specific statement, formula, or rule in Doc A (in Vietnamese)" }
+   - "docB": { "id": docIdB, "title": docTitleB, "statement": "Specific statement, formula, or rule in Doc B (in Vietnamese)" }
+   - "explanation": In-depth explanation of why the difference or pitfall exists (in Vietnamese)
+   - "recommendation": Actionable advice for students to prevent confusion (in Vietnamese)
+5. "mergedMindmap": Construct a merged mindmap representation with a root node, subtopics for shared & unique concepts, and warning nodes for conflicts.
+   - "rootLabel": "Mạng lưới Kiến thức Hợp nhất"
+   - "nodes": Array of { "id": string, "label": string, "type": "topic"|"subtopic"|"concept"|"warning"|"fact", "importance"?: number, "level": number, "parentId"?: string, "detail"?: string }
+
+Output MUST be a valid JSON object matching this exact schema:
+{
+  "fusionTitle": "Báo cáo Hợp nhất & Đối chiếu Đa Tài liệu",
+  "unifiedSummary": "...",
+  "commonConcepts": [
+    { "concept": "...", "definition": "...", "sources": ["..."] }
+  ],
+  "uniqueInsights": [
+    { "docId": "...", "docTitle": "...", "insights": ["..."] }
+  ],
+  "conflicts": [
+    {
+      "id": "conf-1",
+      "topic": "...",
+      "docA": { "id": "...", "title": "...", "statement": "..." },
+      "docB": { "id": "...", "title": "...", "statement": "..." },
+      "explanation": "...",
+      "recommendation": "..."
+    }
+  ],
+  "mergedMindmap": {
+    "rootLabel": "Mạng lưới Kiến thức Hợp nhất",
+    "nodes": [
+      { "id": "m-root", "label": "Mạng lưới Kiến thức Hợp nhất", "type": "topic", "importance": 5, "level": 0 },
+      { "id": "m-common", "label": "Kiến thức Chung (Đã gộp trùng)", "type": "subtopic", "importance": 5, "level": 1, "parentId": "m-root" }
+    ]
+  }
 }
 `;
   }

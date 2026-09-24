@@ -1,13 +1,21 @@
 import React from 'react';
-import { Plus, FileText, Layers, Award, ArrowRight, CheckCircle2, Flame } from 'lucide-react';
+import { Plus, FileText, Layers, Award, ArrowRight, CheckCircle2, Flame, LogIn, Sparkles } from 'lucide-react';
 import { useStudy } from '../../context/StudyContext';
 
 export function DashboardView() {
-  const { stats, setActiveTab, fetchDocumentDetail } = useStudy();
+  const { user, isAuthenticated, openAuthModal, stats, setActiveTab, fetchDocumentDetail } = useStudy();
 
   const handleOpenDoc = (docId: string) => {
     fetchDocumentDetail(docId);
     setActiveTab('workspace');
+  };
+
+  const formatDisplayDate = (d?: string) => {
+    if (!d) return 'Gần đây';
+    if (d.includes('Vừa') || d.includes('Hôm')) return d;
+    const dateObj = new Date(d);
+    if (isNaN(dateObj.getTime())) return d;
+    return dateObj.toLocaleDateString('vi-VN');
   };
 
   return (
@@ -17,21 +25,62 @@ export function DashboardView() {
         <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-white/5 rounded-full blur-2xl pointer-events-none" />
         
         <div className="max-w-2xl space-y-3 relative z-10">
-          <h2 className="text-xl md:text-2xl font-bold tracking-tight">
-            Hôm nay bạn muốn học gì mới?
-          </h2>
-          <p className="text-xs md:text-sm text-teal-100/90 leading-relaxed">
-            Tải lên tài liệu của bạn (PDF, PPT, link video...) để StudyMind tự động tạo ghi chú, sơ đồ tư duy, flashcard và bộ câu hỏi trắc nghiệm ngay lập tức.
-          </p>
-          <div className="pt-2">
-            <button
-              onClick={() => setActiveTab('import')}
-              className="bg-white hover:bg-teal-50 text-[#0F766E] font-bold text-xs md:text-sm px-5 py-2.5 rounded-lg shadow-sm transition-all hover:scale-102 flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Tạo bộ học liệu mới</span>
-            </button>
-          </div>
+          {isAuthenticated ? (
+            <>
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-teal-100 text-xs font-semibold backdrop-blur-xs mb-1">
+                <span>👋 Xin chào, {user.fullName || user.email}!</span>
+              </div>
+              <h2 className="text-xl md:text-2xl font-bold tracking-tight">
+                Hôm nay bạn muốn học gì mới?
+              </h2>
+              <p className="text-xs md:text-sm text-teal-100/90 leading-relaxed">
+                Tải lên tài liệu của bạn (PDF, PPT, link video...) để StudyMind tự động tạo ghi chú, sơ đồ tư duy, flashcard và bộ câu hỏi trắc nghiệm ngay lập tức.
+              </p>
+              <div className="pt-2 flex items-center gap-3">
+                <button
+                  onClick={() => setActiveTab('import')}
+                  className="bg-white hover:bg-teal-50 text-[#0F766E] font-bold text-xs md:text-sm px-5 py-2.5 rounded-lg shadow-sm transition-all hover:scale-102 flex items-center gap-2 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Tạo bộ học liệu mới</span>
+                </button>
+                <button
+                  onClick={() => setActiveTab('history')}
+                  className="bg-teal-800/40 hover:bg-teal-800/60 border border-teal-300/30 text-white font-semibold text-xs md:text-sm px-4 py-2.5 rounded-lg transition-all flex items-center gap-2 cursor-pointer"
+                >
+                  <span>Xem bài học của bạn</span>
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-teal-100 text-xs font-semibold backdrop-blur-xs mb-1">
+                <span>✨ Chế độ Khách (Chưa đăng nhập)</span>
+              </div>
+              <h2 className="text-xl md:text-2xl font-bold tracking-tight">
+                Chào mừng bạn đến với StudyMind AI
+              </h2>
+              <p className="text-xs md:text-sm text-teal-100/90 leading-relaxed">
+                Đăng nhập tài khoản cá nhân để lưu trữ vĩnh viễn bài học trên Supabase Cloud, đồng bộ sơ đồ tư duy, flashcard và theo dõi tiến độ trắc nghiệm của riêng bạn.
+              </p>
+              <div className="pt-2 flex items-center gap-3">
+                <button
+                  onClick={() => openAuthModal('login')}
+                  className="bg-white hover:bg-teal-50 text-[#0F766E] font-bold text-xs md:text-sm px-5 py-2.5 rounded-lg shadow-sm transition-all hover:scale-102 flex items-center gap-2 cursor-pointer"
+                >
+                  <LogIn className="w-4 h-4" />
+                  <span>Đăng nhập ngay</span>
+                </button>
+                <button
+                  onClick={() => openAuthModal('signup')}
+                  className="bg-teal-800/40 hover:bg-teal-800/60 border border-teal-300/30 text-white font-semibold text-xs md:text-sm px-4 py-2.5 rounded-lg transition-all flex items-center gap-2 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4 text-teal-200" />
+                  <span>Đăng ký miễn phí</span>
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -42,10 +91,10 @@ export function DashboardView() {
           <div className="space-y-1">
             <p className="text-xs font-medium text-[#4B5563]">Tài liệu đã tải</p>
             <h3 className="text-2xl font-bold text-[#111827]">
-              {stats?.totalDocuments || 24}
+              {stats?.totalDocuments ?? 0}
             </h3>
             <p className="text-[11px] font-semibold text-[#10B981]">
-              +{stats?.weeklyDocAdded || 3} tài liệu tuần này
+              +{stats?.weeklyDocAdded ?? 0} tài liệu tuần này
             </p>
           </div>
           <div className="w-10 h-10 rounded-xl bg-teal-50 text-[#0F766E] flex items-center justify-center">
@@ -58,10 +107,10 @@ export function DashboardView() {
           <div className="space-y-1">
             <p className="text-xs font-medium text-[#4B5563]">Flashcard đã học</p>
             <h3 className="text-2xl font-bold text-[#111827]">
-              {stats?.flashcardProgress || '152/240'}
+              {stats?.flashcardProgress || '0/0'}
             </h3>
             <p className="text-[11px] font-medium text-slate-500">
-              Tỷ lệ ghi nhớ: <span className="font-bold text-[#F59E0B]">{stats?.retentionRatePercentage || 78}%</span>
+              Tỷ lệ ghi nhớ: <span className="font-bold text-[#F59E0B]">{stats?.retentionRatePercentage ?? 0}%</span>
             </p>
           </div>
           <div className="w-10 h-10 rounded-xl bg-amber-50 text-[#F59E0B] flex items-center justify-center">
@@ -74,10 +123,10 @@ export function DashboardView() {
           <div className="space-y-1">
             <p className="text-xs font-medium text-[#4B5563]">Điểm trắc nghiệm TB</p>
             <h3 className="text-2xl font-bold text-[#111827]">
-              {stats?.averageQuizScore || '8.5/10'}
+              {stats?.averageQuizScore || '0/10'}
             </h3>
             <p className="text-[11px] font-semibold text-[#10B981]">
-              {stats?.quizScoreDiff || '+0.4 điểm so với tháng trước'}
+              {stats?.quizScoreDiff || 'Chưa có dữ liệu'}
             </p>
           </div>
           <div className="w-10 h-10 rounded-xl bg-emerald-50 text-[#10B981] flex items-center justify-center">
@@ -101,39 +150,47 @@ export function DashboardView() {
           </div>
 
           <div className="space-y-3">
-            {stats?.recentDocuments?.map((doc) => (
-              <div
-                key={doc.id}
-                onClick={() => handleOpenDoc(doc.id)}
-                className="p-4 rounded-xl border border-slate-100 hover:border-slate-300 hover:bg-slate-50/80 transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
-              >
-                <div className="space-y-1">
-                  <h4 className="font-semibold text-sm text-[#111827] group-hover:text-[#0F766E] transition-colors">
-                    {doc.title}
-                  </h4>
-                  <p className="text-xs text-slate-500">
-                    {doc.fileType} • {doc.pageCount ? `${doc.pageCount} trang` : doc.duration} • Cập nhật {doc.updatedAt}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  {doc.tags?.map((tag, idx) => (
-                    <span
-                      key={idx}
-                      className={`text-[11px] px-2.5 py-1 rounded-full font-semibold ${
-                        tag.includes('Mindmap')
-                          ? 'bg-teal-50 text-[#0F766E]'
-                          : tag.includes('Quiz')
-                          ? 'bg-emerald-50 text-emerald-700'
-                          : 'bg-amber-50 text-amber-700'
-                      }`}
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                  <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-[#0F766E] group-hover:translate-x-1 transition-all" />
-                </div>
+            {(!stats?.recentDocuments || stats.recentDocuments.length === 0) ? (
+              <div className="p-8 text-center border border-dashed border-slate-200 rounded-xl space-y-2">
+                <FileText className="w-8 h-8 text-slate-300 mx-auto" />
+                <p className="text-xs font-semibold text-slate-700">Chưa có bài học nào trong tài khoản</p>
+                <p className="text-[11px] text-slate-400">Hãy chuyển sang tab "Nhập tài liệu" để tải lên PDF, bài giảng hoặc liên kết web.</p>
               </div>
-            ))}
+            ) : (
+              stats.recentDocuments.map((doc) => (
+                <div
+                  key={doc.id}
+                  onClick={() => handleOpenDoc(doc.id)}
+                  className="p-4 rounded-xl border border-slate-100 hover:border-slate-300 hover:bg-slate-50/80 transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
+                >
+                  <div className="space-y-1">
+                    <h4 className="font-semibold text-sm text-[#111827] group-hover:text-[#0F766E] transition-colors">
+                      {doc.title}
+                    </h4>
+                    <p className="text-xs text-slate-500">
+                      {doc.fileType} • {doc.pageCount ? `${doc.pageCount} trang` : doc.duration} • Cập nhật {formatDisplayDate(doc.updatedAt)}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {doc.tags?.map((tag, idx) => (
+                      <span
+                        key={idx}
+                        className={`text-[11px] px-2.5 py-1 rounded-full font-semibold ${
+                          tag.includes('Mindmap')
+                            ? 'bg-teal-50 text-[#0F766E]'
+                            : tag.includes('Quiz')
+                            ? 'bg-emerald-50 text-emerald-700'
+                            : 'bg-amber-50 text-amber-700'
+                        }`}
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                    <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-[#0F766E] group-hover:translate-x-1 transition-all" />
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
 

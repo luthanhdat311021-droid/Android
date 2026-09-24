@@ -18,34 +18,71 @@ import {
   BarChart3,
   X,
   Layers,
-  Brain
+  Brain,
+  GitCompare,
+  CheckSquare,
+  Square,
+  Loader2,
+  Lock,
+  LogIn,
+  ShieldCheck,
+  UserCheck
 } from 'lucide-react';
 import { useStudy } from '../../context/StudyContext';
 import { LessonHistoryItem, QuizHistoryRecord } from '../../types';
+import { KnowledgeFusionView } from '../fusion/KnowledgeFusionView';
+import { GuestGuard } from '../common/GuestGuard';
 
 export function HistoryView() {
   const { 
+    user,
+    isAuthenticated,
+    openAuthModal,
     historyList, 
     isSupabaseActive, 
     deleteHistoryItem, 
-    continueLessonFromHistory 
+    continueLessonFromHistory,
+    performKnowledgeFusion,
+    fusionLoading,
+    fusionResult
   } = useStudy();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string>('ALL');
   const [activeQuizModal, setActiveQuizModal] = useState<QuizHistoryRecord[] | null>(null);
   const [modalTitle, setModalTitle] = useState<string>('');
+  const [selectedForFusion, setSelectedForFusion] = useState<string[]>([]);
+  const [historySubMode, setHistorySubMode] = useState<'list' | 'fusion'>('list');
+
+  const toggleSelectForFusion = (id: string) => {
+    if (selectedForFusion.includes(id)) {
+      setSelectedForFusion(selectedForFusion.filter(item => item !== id));
+    } else {
+      setSelectedForFusion([...selectedForFusion, id]);
+    }
+  };
+
+  const handleStartFusionFromHistory = async () => {
+    if (selectedForFusion.length >= 2) {
+      await performKnowledgeFusion(selectedForFusion);
+      setHistorySubMode('fusion');
+    }
+  };
 
   // Filtered History List
-  const filteredList = historyList.filter(item => {
-    const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (item.tags && item.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase())));
+  const safeHistoryList = Array.isArray(historyList) ? historyList : [];
+  const filteredList = safeHistoryList.filter(item => {
+    if (!item || !item.title) return false;
+    const titleMatch = item.title.toLowerCase().includes(searchQuery.toLowerCase());
+    const tags = Array.isArray(item.tags) ? item.tags : [];
+    const tagMatch = tags.some(t => typeof t === 'string' && t.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchesSearch = titleMatch || tagMatch;
     
     if (selectedTag === 'ALL') return matchesSearch;
     if (selectedTag === 'PDF') return matchesSearch && item.fileType === 'PDF';
     if (selectedTag === 'VIDEO') return matchesSearch && item.fileType === 'VIDEO';
     if (selectedTag === 'URL') return matchesSearch && item.fileType === 'URL';
-    return matchesSearch && item.tags?.includes(selectedTag);
+    return matchesSearch && tags.includes(selectedTag);
   });
 
   const getFileIcon = (fileType: string) => {
@@ -64,6 +101,32 @@ export function HistoryView() {
     return Math.max(...quizHistory.map(q => q.score));
   };
 
+  const formatDisplayDate = (dateStr?: string) => {
+    if (!dateStr) return 'Gần đây';
+    if (dateStr.includes('Vừa') || dateStr.includes('Hôm')) return dateStr;
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString('vi-VN');
+  };
+
+  const formatRecentTime = (dateStr?: string) => {
+    if (!dateStr) return 'Chưa có';
+    if (dateStr.includes('Vừa') || dateStr.includes('Hôm')) return dateStr;
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + ' ' + d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+  };
+
+  if (!isAuthenticated) {
+    return (
+      <GuestGuard
+        featureTitle="Lịch sử Bài học & Tiến trình Học tập"
+        featureDescription="Bạn đang ở chế độ khách. Để đảm bảo tính riêng tư và cá nhân hóa, toàn bộ bài học đã lưu, sơ đồ tư duy và kết quả làm trắc nghiệm chỉ hiển thị khi bạn đăng nhập vào tài khoản của mình."
+        featureIcon={History}
+      />
+    );
+  }
+
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
       {/* Header Banner */}
@@ -72,12 +135,18 @@ export function HistoryView() {
           <div className="flex items-center gap-2 text-[#0F766E] text-xs font-bold uppercase tracking-wider mb-1">
             <History className="w-4 h-4" />
             <span>Lịch sử & Đồng bộ Dữ liệu</span>
+            {user?.email && (
+              <span className="ml-2 px-2 py-0.5 rounded-full bg-teal-50 border border-teal-200 text-[#0F766E] text-[10px] font-semibold flex items-center gap-1">
+                <UserCheck className="w-3 h-3" />
+                <span>{user.email}</span>
+              </span>
+            )}
           </div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
             Lịch sử Bài học & Tiến trình Học tập
           </h1>
           <p className="text-slate-500 text-xs sm:text-sm mt-1">
-            Quản lý toàn bộ các bài học đã chuyển hóa, kết quả trắc nghiệm và sơ đồ tư duy đã tạo.
+            Kho bài học cá nhân của <strong className="text-slate-700">{user?.fullName || user?.email}</strong>. Quản lý toàn bộ bài học, kết quả trắc nghiệm và sơ đồ tư duy đã tạo.
           </p>
         </div>
 
@@ -106,6 +175,93 @@ export function HistoryView() {
         </div>
       </div>
 
+      {/* Mode Switcher Tabs */}
+      <div className="flex border-b border-slate-200 space-x-6">
+        <button
+          onClick={() => setHistorySubMode('list')}
+          className={`pb-3 text-xs md:text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${
+            historySubMode === 'list'
+              ? 'border-[#0F766E] text-[#0F766E]'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <BookOpen className="w-4 h-4" />
+          <span>Danh sách Bài học ({safeHistoryList.length})</span>
+        </button>
+
+        <button
+          onClick={() => setHistorySubMode('fusion')}
+          className={`pb-3 text-xs md:text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${
+            historySubMode === 'fusion'
+              ? 'border-[#0F766E] text-[#0F766E]'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <GitCompare className="w-4 h-4" />
+          <span>Hợp nhất Kiến thức AI {fusionResult ? '✨' : ''}</span>
+        </button>
+      </div>
+
+      {/* Conditional Rendering: Fusion View vs History List */}
+      {historySubMode === 'fusion' ? (
+        <div className="space-y-4">
+          <button
+            onClick={() => setHistorySubMode('list')}
+            className="inline-flex items-center gap-2 text-xs font-bold text-[#0F766E] hover:text-[#0D645E] bg-teal-50 px-3 py-1.5 rounded-xl border border-teal-200/60 transition-colors"
+          >
+            <span>← Quay lại Danh sách bài học</span>
+          </button>
+          <KnowledgeFusionView />
+        </div>
+      ) : (
+        <>
+
+      {/* Floating / Sticky Multi-Lesson Fusion Action Bar */}
+      {selectedForFusion.length > 0 && (
+        <div className="bg-gradient-to-r from-teal-50/90 via-emerald-50/90 to-teal-50/90 text-slate-900 p-4 sm:p-5 rounded-2xl shadow-lg border-2 border-teal-500/30 flex flex-col sm:flex-row items-center justify-between gap-4 animate-in slide-in-from-top-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#0F766E] flex items-center justify-center font-bold text-white shrink-0 shadow-md">
+              <GitCompare className="w-5 h-5 text-teal-100" />
+            </div>
+            <div>
+              <h4 className="text-xs sm:text-sm font-extrabold text-[#0F766E] flex items-center gap-2">
+                <span>Đã chọn {selectedForFusion.length} bài học có nội dung tương tự</span>
+                <span className="px-2 py-0.5 bg-[#0F766E] text-white rounded-md text-[10px] font-extrabold">AI Fusion</span>
+              </h4>
+              <p className="text-[11px] text-slate-600 mt-0.5">
+                Sẵn sàng hợp nhất thông tin trùng lặp, đối chiếu khác biệt và phát hiện cờ cảnh báo ⚠️
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <button
+              onClick={() => setSelectedForFusion([])}
+              className="px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-xl border border-slate-200 transition-colors shadow-2xs"
+            >
+              Bỏ chọn
+            </button>
+
+            <button
+              onClick={handleStartFusionFromHistory}
+              disabled={selectedForFusion.length < 2 || fusionLoading}
+              className={`px-5 py-2.5 rounded-xl text-xs font-bold shadow-md flex items-center justify-center gap-2 flex-1 sm:flex-initial transition-all ${
+                selectedForFusion.length >= 2 && !fusionLoading
+                  ? 'bg-[#0F766E] hover:bg-[#0D645E] text-white shadow-teal-700/20 hover:scale-105 active:scale-95'
+                  : 'bg-slate-200 text-slate-400 cursor-not-allowed border border-slate-300'
+              }`}
+            >
+              {fusionLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin text-teal-100" />
+              ) : (
+                <Sparkles className="w-4 h-4 text-teal-100" />
+              )}
+              <span>Hợp nhất AI ({selectedForFusion.length} bài)</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Stats Summary Bar */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
@@ -114,7 +270,7 @@ export function HistoryView() {
           </div>
           <div>
             <p className="text-xs text-slate-500 font-medium">Tổng bài học đã lưu</p>
-            <p className="text-2xl font-bold text-slate-900 mt-0.5">{historyList.length}</p>
+            <p className="text-2xl font-bold text-slate-900 mt-0.5">{safeHistoryList.length}</p>
           </div>
         </div>
 
@@ -137,7 +293,7 @@ export function HistoryView() {
           <div>
             <p className="text-xs text-slate-500 font-medium">Lần học gần nhất</p>
             <p className="text-sm font-bold text-slate-900 mt-1 truncate">
-              {historyList[0] ? new Date(historyList[0].updatedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + ' hôm nay' : 'Chưa có'}
+              {formatRecentTime(historyList[0]?.updatedAt)}
             </p>
           </div>
         </div>
@@ -183,25 +339,38 @@ export function HistoryView() {
 
       {/* History Grid */}
       {filteredList.length === 0 ? (
-        <div className="bg-white rounded-2xl p-12 text-center border border-slate-200/80 shadow-xs space-y-3">
-          <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
-            <History className="w-6 h-6" />
+        <div className="bg-white rounded-2xl p-12 text-center border border-slate-200/80 shadow-xs space-y-4">
+          <div className="w-14 h-14 rounded-2xl bg-teal-50 text-[#0F766E] flex items-center justify-center mx-auto border border-teal-100">
+            <BookOpen className="w-7 h-7" />
           </div>
-          <h3 className="text-base font-bold text-slate-900">Không tìm thấy bài học nào</h3>
-          <p className="text-xs text-slate-500 max-w-sm mx-auto">
-            Thử thay đổi từ khóa tìm kiếm hoặc nhập bài học mới trong tab "Nhập tài liệu".
-          </p>
+          <div className="max-w-md mx-auto space-y-1.5">
+            <h3 className="text-base font-bold text-slate-900">
+              {safeHistoryList.length === 0 
+                ? 'Chưa có bài học nào trong tài khoản của bạn' 
+                : 'Không tìm thấy bài học nào phù hợp'}
+            </h3>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              {safeHistoryList.length === 0 
+                ? `Tài khoản ${user?.email || ''} hiện chưa có dữ liệu bài học. Hãy chuyển sang tab "Nhập tài liệu" để tải lên PDF, Video bài giảng hoặc liên kết web để bắt đầu học!`
+                : 'Thử thay đổi từ khóa tìm kiếm hoặc bấm "Tất cả" trên thanh lọc tài liệu.'}
+            </p>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredList.map((item) => {
             const bestScore = getBestQuizScore(item.quizHistory);
             const hasQuizAttempts = item.quizHistory && item.quizHistory.length > 0;
+            const isSelected = selectedForFusion.includes(item.id);
 
             return (
               <div 
                 key={item.id}
-                className="bg-white rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all p-5 flex flex-col justify-between space-y-4 group"
+                className={`bg-white rounded-2xl border transition-all p-5 flex flex-col justify-between space-y-4 group ${
+                  isSelected 
+                    ? 'border-[#0F766E] ring-2 ring-[#0F766E]/20 bg-teal-50/20 shadow-md' 
+                    : 'border-slate-200/80 hover:border-slate-300 shadow-xs hover:shadow-md'
+                }`}
               >
                 {/* Header info */}
                 <div className="space-y-3">
@@ -215,13 +384,28 @@ export function HistoryView() {
                       </span>
                     </div>
 
-                    <button
-                      onClick={() => deleteHistoryItem(item.id)}
-                      className="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 transition-colors"
-                      title="Xóa khỏi lịch sử"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => toggleSelectForFusion(item.id)}
+                        className={`p-1.5 rounded-lg border transition-all flex items-center gap-1 text-[11px] font-bold ${
+                          isSelected 
+                            ? 'bg-[#0F766E] text-white border-[#0F766E] shadow-xs' 
+                            : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200'
+                        }`}
+                        title="Chọn bài học để hợp nhất AI"
+                      >
+                        {isSelected ? <CheckSquare className="w-3.5 h-3.5 fill-white text-[#0F766E]" /> : <Square className="w-3.5 h-3.5 text-slate-400" />}
+                        <span>{isSelected ? 'Đã chọn' : 'Hợp nhất'}</span>
+                      </button>
+
+                      <button
+                        onClick={() => deleteHistoryItem(item.id)}
+                        className="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 transition-colors"
+                        title="Xóa khỏi lịch sử"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
 
                   {/* Title */}
@@ -246,7 +430,7 @@ export function HistoryView() {
                   <div className="flex items-center justify-between text-xs text-slate-500">
                     <span className="flex items-center gap-1 text-[11px]">
                       <Calendar className="w-3.5 h-3.5" />
-                      {new Date(item.updatedAt).toLocaleDateString('vi-VN')}
+                      {formatDisplayDate(item.updatedAt)}
                     </span>
                     {bestScore !== null && (
                       <button 
@@ -361,12 +545,14 @@ export function HistoryView() {
 
             <button
               onClick={() => setActiveQuizModal(null)}
-              className="w-full bg-slate-900 text-white font-bold text-xs py-2.5 rounded-xl hover:bg-slate-800 transition-colors"
+              className="w-full bg-[#0F766E] hover:bg-[#0D645E] text-white font-bold text-xs py-2.5 rounded-xl transition-colors shadow-xs"
             >
               Đóng
             </button>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );

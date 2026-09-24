@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { HelpCircle, Clock, Check, Sparkles, Award, Plus, X, RotateCcw } from 'lucide-react';
 import { useStudy } from '../../context/StudyContext';
 import { QuizQuestion } from '../../types';
+import { GuestGuard } from '../common/GuestGuard';
+import { NoActiveDocCard } from '../common/NoActiveDocCard';
 
 export function QuizView() {
-  const { activeDocData, submitQuiz, addQuizQuestion, regenerateQuizAI, setActiveTab, showToast } = useStudy();
+  const { isAuthenticated, activeDocData, submitQuiz, addQuizQuestion, regenerateQuizAI, setActiveTab, showToast } = useStudy();
 
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
 
@@ -13,51 +15,32 @@ export function QuizView() {
     await regenerateQuizAI();
     setIsGenerating(false);
   };
+
+  if (!isAuthenticated) {
+    return (
+      <GuestGuard
+        featureTitle="Luyện tập Trắc nghiệm Đánh giá Năng lực AI"
+        featureDescription="Bạn đang ở chế độ khách. Để đảm bảo tính riêng tư và cá nhân hóa, bộ câu hỏi trắc nghiệm, điểm số kiểm tra và phân tích giải thích AI chỉ hiển thị khi bạn đăng nhập tài khoản."
+        featureIcon={HelpCircle}
+      />
+    );
+  }
+
+  if (!activeDocData?.document) {
+    return (
+      <NoActiveDocCard
+        featureName="Trắc nghiệm ôn tập"
+        description="Hãy mở một bài học từ danh sách bài học đã lưu của bạn hoặc chuyển sang tab 'Nhập tài liệu' để AI tự động tạo đề thi trắc nghiệm theo bài học của bạn."
+        icon={HelpCircle}
+      />
+    );
+  }
+
   const quizData = activeDocData?.studyPack?.quiz || {
     title: "Luyện tập trắc nghiệm AI",
-    subject: "Sinh học Tế bào - Ty thể và Chu trình chuyển hóa",
+    subject: activeDocData?.document?.title || "Tài liệu học tập",
     timeLimitMinutes: 15,
-    questions: [
-      {
-        id: "q-1",
-        questionNumber: 1,
-        questionText: "Đặc điểm cấu tạo nào sau đây của màng trong ty thể giúp tăng diện tích bề mặt chứa các phức hợp enzyme hô hấp?",
-        options: [
-          "A. Màng trơn nhẵn có các lỗ porin kích thước lớn",
-          "B. Gấp nếp sâu tạo thành các mào (cristae)",
-          "C. Chứa nhiều cholesterol làm cứng màng",
-          "D. Bao bọc bởi lớp màng phospholipid kép tự do"
-        ],
-        correctIndex: 1,
-        explanation: "Các mào (cristae) được tạo ra do màng trong gấp nếp sâu vào trong chất nền, làm tăng diện tích bề mặt tối đa cho các phản ứng chuỗi truyền electron."
-      },
-      {
-        id: "q-2",
-        questionNumber: 2,
-        questionText: "Loại ADN nào được tìm thấy bên trong chất nền (matrix) của ty thể?",
-        options: [
-          "A. ADN dạng sợi thẳng liên kết với histon",
-          "B. ADN dạng vòng kép tương tự như ở vi khuẩn",
-          "C. ARN thông tin dLink",
-          "D. Không có ADN, chỉ có Ribosome 80S"
-        ],
-        correctIndex: 1,
-        explanation: "Ty thể chứa ADN vòng kép trần (không liên kết với histon) giống hệt ADN vi khuẩn, chứng minh nguồn gốc nội cộng sinh."
-      },
-      {
-        id: "q-3",
-        questionNumber: 3,
-        questionText: "Thành phần lipid đặc trưng nào sau đây có trong màng trong ty thể giải thích khả năng chống thấm ion cực tốt để phục vụ chuỗi truyền electron?",
-        options: [
-          "A. Cholesterol nồng độ cao",
-          "B. Cardiolipin đặc hữu",
-          "C. Phosphatidylcholine liên kết peptid",
-          "D. Glycoprotein màng ngoài"
-        ],
-        correctIndex: 1,
-        explanation: "Đáp án B chính xác! Cardiolipin là một phospholipid kép có cấu trúc đặc hữu gồm 4 chuỗi axit béo, khiến cho màng trong cực kỳ dày đặc và không cho ion tự do đi qua, duy trì gradient proton H+ cần thiết cho phức hợp ATP Synthase hoạt động."
-      }
-    ]
+    questions: []
   };
 
   const questions: QuizQuestion[] = quizData.questions;

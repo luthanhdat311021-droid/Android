@@ -53,6 +53,8 @@ import {
 } from 'lucide-react';
 import { useStudy } from '../../context/StudyContext';
 import { MindmapNode as StudyMindmapNode, MindmapNodeType, MindmapEdge as StudyMindmapEdge } from '../../types';
+import { GuestGuard } from '../common/GuestGuard';
+import { NoActiveDocCard } from '../common/NoActiveDocCard';
 
 // Utility for node type metadata (badge color, icon)
 const NODE_TYPE_META: Record<string, { label: string; bg: string; text: string; icon: any }> = {
@@ -642,6 +644,7 @@ function MindmapFlowCanvas({
 
 export function MindmapView() {
   const { 
+    isAuthenticated,
     activeDocData, 
     setActiveTab, 
     showToast, 
@@ -650,6 +653,26 @@ export function MindmapView() {
     deleteMindmapNode,
     expandMindmapNodeAI 
   } = useStudy();
+
+  if (!isAuthenticated) {
+    return (
+      <GuestGuard
+        featureTitle="Sơ đồ Tư duy Đa chiều AI"
+        featureDescription="Bạn đang ở chế độ khách. Để đảm bảo tính riêng tư và cá nhân hóa, toàn bộ sơ đồ tư duy phân nhánh, mở rộng AI và liên kết đa chiều chỉ hiển thị khi bạn đăng nhập tài khoản."
+        featureIcon={GitFork}
+      />
+    );
+  }
+
+  if (!activeDocData?.document) {
+    return (
+      <NoActiveDocCard
+        featureName="Sơ đồ tư duy"
+        description="Hãy mở một bài học từ danh sách bài học đã lưu của bạn hoặc chuyển sang tab 'Nhập tài liệu' để AI tự động vẽ sơ đồ tư duy."
+        icon={GitFork}
+      />
+    );
+  }
 
   const mindmapData = activeDocData?.studyPack?.mindmap;
 

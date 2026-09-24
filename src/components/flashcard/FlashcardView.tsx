@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { Layers, RotateCw, Play, Plus, Trash2, X, Check, Sparkles } from 'lucide-react';
+import { Layers, RotateCw, Play, Plus, Trash2, X, Check, Sparkles, BookOpen } from 'lucide-react';
 import { useStudy } from '../../context/StudyContext';
 import { Flashcard } from '../../types';
+import { GuestGuard } from '../common/GuestGuard';
+import { NoActiveDocCard } from '../common/NoActiveDocCard';
 
 export function FlashcardView() {
-  const { activeDocData, reviewFlashcard, addFlashcard, deleteFlashcard, regenerateFlashcardsAI } = useStudy();
+  const { isAuthenticated, activeDocData, reviewFlashcard, addFlashcard, deleteFlashcard, regenerateFlashcardsAI } = useStudy();
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
 
   const handleGenerateAIFlashcards = async () => {
@@ -12,26 +14,28 @@ export function FlashcardView() {
     await regenerateFlashcardsAI();
     setIsGenerating(false);
   };
-  const flashcards: Flashcard[] = activeDocData?.studyPack?.flashcards || [
-    {
-      id: "fc-1",
-      front: "Thuyết nội cộng sinh (Endosymbiotic Theory) giải thích điều gì về nguồn gốc ty thể?",
-      back: "Giải thích ty thể vốn là vi khuẩn hiếu khí sống cộng sinh bên trong tế bào chủ nhân thực cổ đại, sau này trở thành bào quan tổng hợp ATP.",
-      difficulty: "medium"
-    },
-    {
-      id: "fc-2",
-      front: "Vai trò chính của Cardiolipin trong màng trong ty thể là gì?",
-      back: "Cardiolipin là phospholipid kép đặc hữu làm màng trong không thấm ion H+, giúp duy trì gradient proton cho enzyme ATP Synthase.",
-      difficulty: "hard"
-    },
-    {
-      id: "fc-3",
-      front: "Chu trình Krebs (TCA cycle) diễn ra tại vị trí nào của ty thể?",
-      back: "Diễn ra tại Chất nền (Matrix) của ty thể nhờ hệ enzyme hòa tan đặc hiệu.",
-      difficulty: "easy"
-    }
-  ];
+
+  if (!isAuthenticated) {
+    return (
+      <GuestGuard
+        featureTitle="Thẻ Ghi nhớ Thông minh (Flashcard AI)"
+        featureDescription="Bạn đang ở chế độ khách. Để đảm bảo tính riêng tư và cá nhân hóa, toàn bộ bộ thẻ ghi nhớ, mức độ thành thạo và thuật toán ôn tập Spaced Repetition chỉ hiển thị khi bạn đăng nhập tài khoản."
+        featureIcon={Layers}
+      />
+    );
+  }
+
+  if (!activeDocData?.document) {
+    return (
+      <NoActiveDocCard
+        featureName="Thẻ ghi nhớ Flashcard"
+        description="Hãy mở một bài học từ danh sách bài học đã lưu của bạn hoặc chuyển sang tab 'Nhập tài liệu' để AI tự động trích xuất các thuật ngữ cốt lõi thành thẻ flashcard."
+        icon={Layers}
+      />
+    );
+  }
+
+  const flashcards: Flashcard[] = activeDocData?.studyPack?.flashcards || [];
 
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [isFlipped, setIsFlipped] = useState<boolean>(false);

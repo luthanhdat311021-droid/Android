@@ -9,7 +9,8 @@ import {
   MindmapNode,
   Flashcard,
   QuizQuestion,
-  LessonHistoryItem
+  LessonHistoryItem,
+  KnowledgeFusionResult
 } from '../types';
 
 interface StudyContextType {
@@ -25,12 +26,17 @@ interface StudyContextType {
   loading: boolean;
   toastMessage: string | null;
   showToast: (msg: string) => void;
-  uploadDocument: (file: File | null, language: string, depth: string, options: OutputOptions) => Promise<any>;
+  uploadDocument: (file: File | null, language: string, depth: string, options: OutputOptions, rawText?: string, fileName?: string) => Promise<any>;
   processVideo: (videoUrl: string) => Promise<void>;
   processUrl: (url: string) => Promise<void>;
   reviewFlashcard: (cardId: string, rating: string) => Promise<void>;
   submitQuiz: (quizId: string, answers: Record<string, number>) => Promise<any>;
   sendChatMessage: (documentId: string, question: string, history: any[]) => Promise<string>;
+  
+  // Knowledge Fusion Operations
+  fusionResult: KnowledgeFusionResult | null;
+  fusionLoading: boolean;
+  performKnowledgeFusion: (docIds: string[]) => Promise<any>;
   
   // Mindmap Operations
   addMindmapNode: (nodeData: Partial<MindmapNode>) => Promise<void>;
@@ -78,18 +84,27 @@ export function StudyProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User>(() => {
     const saved = localStorage.getItem('studymind_user_session');
     if (saved) {
-      try { return JSON.parse(saved); } catch (e) {}
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.email) return parsed;
+      } catch (e) {}
     }
     return {
-      fullName: "Học viên StudyMind",
-      email: "student@studymind.ai",
-      membershipTier: "Basic",
+      fullName: "Khách ghé thăm",
+      membershipTier: "Guest",
       avatarUrl: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80"
     };
   });
 
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    return Boolean(localStorage.getItem('studymind_user_session'));
+    const saved = localStorage.getItem('studymind_user_session');
+    if (saved) {
+      try {
+        const u = JSON.parse(saved);
+        return Boolean(u && u.email);
+      } catch (e) {}
+    }
+    return false;
   });
 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
@@ -112,53 +127,132 @@ export function StudyProvider({ children }: { children: ReactNode }) {
   const openEditProfileModal = () => setIsEditProfileOpen(true);
   const closeEditProfileModal = () => setIsEditProfileOpen(false);
 
-  const login = async (email?: string, password?: string) => {
+const getApiUrl = (endpoint: string): string => {
+  if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) return endpoint;
+  const isNative = typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.();
+  if (isNative) {
+    return `https://studymind-app-five.vercel.app${endpoint}`;
+  }
+  return endpoint;
+};
+
+const safeFetchJson = async (res: Response): Promise<{ ok: boolean; data: any; errorMsg?: string }> => {
+  const contentType = res.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
     try {
-      const res = await fetch('/api/v1/auth/login', {
+      const data = await res.json();
+      return { ok: res.ok && data.success !== false, data, errorMsg: data.error };
+    } catch (e: any) {
+      return { ok: false, data: null, errorMsg: "Dữ liệu phản hồi từ máy chủ không đúng định dạng JSON." };
+    }
+  } else {
+    const text = await res.text();
+    if (res.status === 413 || text.includes('Request Entity Too Large') || text.includes('Payload Too Large')) {
+      return { 
+        ok: false, 
+        data: null, 
+        errorMsg: "Tệp tin quá lớn! Giới hạn trên Vercel tối đa 4.5MB. Vui lòng chọn tệp nhỏ hơn." 
+      };
+    }
+    return { 
+      ok: false, 
+      data: null, 
+      errorMsg: text ? text.slice(0, 120) : `Lỗi máy chủ (Mã lỗi ${res.status})` 
+    };
+  }
+};
+
+  const login = async (email?: string, password?: string) => {
+    const cleanEmail = email?.trim().toLowerCase() || 'demo@studymind.ai';
+    const fallbackUser: User = {
+      fullName: cleanEmail.split('@')[0] || 'Học viên StudyMind',
+      email: cleanEmail,
+      membershipTier: "Basic",
+      avatarUrl: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80"
+    };
+
+    let loggedInUser = fallbackUser;
+    try {
+      const res = await fetch(getApiUrl('/api/v1/auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email: cleanEmail, password })
       });
-      const data = await res.json();
-      if (data.success && data.user) {
-        setUser(data.user);
-        setIsAuthenticated(true);
-        localStorage.setItem('studymind_user_session', JSON.stringify(data.user));
-        showToast(`Chào mừng trở lại, ${data.user.fullName}!`);
-        await fetchHistory();
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.user) {
+          loggedInUser = data.user;
+        }
       }
-      return data;
     } catch (err: any) {
-      console.error("Login error:", err);
-      return { success: false, error: err.message };
+      console.warn("API Login failed, using local session login fallback:", err);
     }
+
+    setUser(loggedInUser);
+    setIsAuthenticated(true);
+    localStorage.setItem('studymind_user_session', JSON.stringify(loggedInUser));
+    showToast(`Chào mừng trở lại, ${loggedInUser.fullName}!`);
+    closeAuthModal();
+
+    // Fetch user history for this specific logged-in user
+    try {
+      const histRes = await fetch(getApiUrl('/api/v1/history'), {
+        headers: { 'x-user-email': loggedInUser.email || '' }
+      });
+      const histData = await histRes.json();
+      if (histData.success && Array.isArray(histData.data)) {
+        setIsSupabaseActive(Boolean(histData.isSupabaseActive));
+        setHistoryList(histData.data);
+        localStorage.setItem(`studymind_cached_history_${loggedInUser.email.toLowerCase()}`, JSON.stringify(histData.data));
+      }
+    } catch (e) {}
+
+    fetchDashboardStats(loggedInUser.email);
+    return { success: true, user: loggedInUser };
   };
 
   const signup = async (fullName: string, email: string, password?: string) => {
+    const cleanEmail = email.trim().toLowerCase();
+    const displayName = (fullName && fullName.trim() !== '') ? fullName.trim() : cleanEmail.split('@')[0];
+    const fallbackUser: User = {
+      fullName: displayName,
+      email: cleanEmail,
+      membershipTier: "Tài khoản Mới",
+      avatarUrl: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80"
+    };
+
+    let signedUpUser = fallbackUser;
     try {
-      const res = await fetch('/api/v1/auth/signup', {
+      const res = await fetch(getApiUrl('/api/v1/auth/signup'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fullName, email, password })
+        body: JSON.stringify({ fullName: displayName, email: cleanEmail, password })
       });
-      const data = await res.json();
-      if (data.success && data.user) {
-        setUser(data.user);
-        setIsAuthenticated(true);
-        localStorage.setItem('studymind_user_session', JSON.stringify(data.user));
-        showToast(`Tạo tài khoản thành công! Chào mừng ${data.user.fullName}!`);
-        await fetchHistory();
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.user) {
+          signedUpUser = data.user;
+        }
       }
-      return data;
     } catch (err: any) {
-      console.error("Signup error:", err);
-      return { success: false, error: err.message };
+      console.warn("API Signup failed, using local session fallback:", err);
     }
+
+    setUser(signedUpUser);
+    setIsAuthenticated(true);
+    localStorage.setItem('studymind_user_session', JSON.stringify(signedUpUser));
+    showToast(`Tạo tài khoản thành công! Chào mừng ${signedUpUser.fullName}!`);
+    closeAuthModal();
+
+    setHistoryList([]);
+    localStorage.setItem(`studymind_cached_history_${signedUpUser.email.toLowerCase()}`, JSON.stringify([]));
+    fetchDashboardStats(signedUpUser.email);
+    return { success: true, user: signedUpUser };
   };
 
   const updateUserProfile = async (fullName: string, avatarUrl: string) => {
     try {
-      const res = await fetch('/api/v1/user/profile', {
+      const res = await fetch(getApiUrl('/api/v1/user/profile'), {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -185,7 +279,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       const formData = new FormData();
       formData.append('avatar', file);
 
-      const res = await fetch('/api/v1/user/upload-avatar', {
+      const res = await fetch(getApiUrl('/api/v1/user/upload-avatar'), {
         method: 'POST',
         headers: {
           'x-user-email': user?.email || ''
@@ -209,15 +303,23 @@ export function StudyProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     try {
-      await fetch('/api/v1/auth/logout', { method: 'POST' });
+      await fetch(getApiUrl('/api/v1/auth/logout'), { method: 'POST' });
     } catch (err) {}
     localStorage.removeItem('studymind_user_session');
+    localStorage.removeItem('studymind_cached_history');
+    if (user?.email) {
+      localStorage.removeItem(`studymind_cached_history_${user.email.toLowerCase()}`);
+    }
     setIsAuthenticated(false);
     setUser({
       fullName: "Khách ghé thăm",
-      membershipTier: "Basic",
+      membershipTier: "Guest",
       avatarUrl: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80"
     });
+    setHistoryList([]);
+    setDocuments([]);
+    setStats(null);
+    setActiveDocData(null);
     showToast("👋 Đã đăng xuất tài khoản!");
   };
 
@@ -228,12 +330,59 @@ export function StudyProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState<boolean>(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const [historyList, setHistoryList] = useState<LessonHistoryItem[]>([]);
-  const [isSupabaseActive, setIsSupabaseActive] = useState<boolean>(false);
-
-  const fetchDashboardStats = async () => {
+  const [historyList, setHistoryList] = useState<LessonHistoryItem[]>(() => {
     try {
-      const res = await fetch('/api/v1/user/stats');
+      const savedUser = localStorage.getItem('studymind_user_session');
+      if (savedUser) {
+        const u = JSON.parse(savedUser);
+        if (u && u.email) {
+          const cached = localStorage.getItem(`studymind_cached_history_${u.email.toLowerCase()}`);
+          return cached ? JSON.parse(cached) : [];
+        }
+      }
+      return [];
+    } catch {
+      return [];
+    }
+  });
+  const [isSupabaseActive, setIsSupabaseActive] = useState<boolean>(true);
+
+  const [fusionResult, setFusionResult] = useState<KnowledgeFusionResult | null>(null);
+  const [fusionLoading, setFusionLoading] = useState<boolean>(false);
+
+  const performKnowledgeFusion = async (docIds: string[]) => {
+    setFusionLoading(true);
+    try {
+      const res = await fetch(getApiUrl('/api/v1/fusion/analyze'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ documentIds: docIds })
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        setFusionResult(data.data);
+        showToast("✨ Đã hợp nhất & phân tích đối chiếu thành công!");
+      } else {
+        showToast(data.error || "Không thể thực hiện hợp nhất tài liệu");
+      }
+      return data;
+    } catch (err: any) {
+      console.error("Knowledge fusion error:", err);
+      showToast("Lỗi khi kết nối hệ thống hợp nhất!");
+      return { success: false, error: err.message };
+    } finally {
+      setFusionLoading(false);
+    }
+  };
+
+  const fetchDashboardStats = async (emailOverride?: string) => {
+    try {
+      const activeEmail = emailOverride || user?.email || '';
+      const res = await fetch(getApiUrl('/api/v1/user/stats'), {
+        headers: {
+          'x-user-email': activeEmail
+        }
+      });
       const data = await res.json();
       if (data.success) {
         setStats(data.data);
@@ -245,24 +394,62 @@ export function StudyProvider({ children }: { children: ReactNode }) {
   };
 
   const fetchHistory = async () => {
+    if (!isAuthenticated || !user?.email) {
+      setHistoryList([]);
+      try {
+        localStorage.removeItem('studymind_cached_history');
+      } catch (e) {}
+      return [];
+    }
     try {
-      const res = await fetch('/api/v1/history');
+      const res = await fetch(getApiUrl('/api/v1/history'), {
+        headers: {
+          'x-user-email': user.email
+        }
+      });
       const data = await res.json();
-      if (data.success) {
-        setHistoryList(data.data || []);
+      if (data.success && Array.isArray(data.data)) {
         setIsSupabaseActive(Boolean(data.isSupabaseActive));
+        setHistoryList(data.data);
+        try {
+          localStorage.setItem(`studymind_cached_history_${user.email.toLowerCase()}`, JSON.stringify(data.data));
+        } catch (e) {}
+        return data.data;
       }
     } catch (err) {
       console.error("Failed to fetch lesson history:", err);
+      try {
+        const cached = localStorage.getItem(`studymind_cached_history_${user.email.toLowerCase()}`);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          setHistoryList(parsed);
+          return parsed;
+        }
+      } catch (e) {}
     }
+    return [];
   };
 
   const deleteHistoryItem = async (id: string) => {
     try {
-      const res = await fetch(`/api/v1/history/${id}`, { method: 'DELETE' });
+      const res = await fetch(getApiUrl(`/api/v1/history/${id}`), { 
+        method: 'DELETE',
+        headers: {
+          'x-user-email': user?.email || ''
+        }
+      });
       const data = await res.json();
       if (data.success) {
         showToast("Đã xóa bài học khỏi lịch sử!");
+        setHistoryList(prev => {
+          const updated = prev.filter(item => item.id !== id);
+          if (user?.email) {
+            try {
+              localStorage.setItem(`studymind_cached_history_${user.email.toLowerCase()}`, JSON.stringify(updated));
+            } catch (e) {}
+          }
+          return updated;
+        });
         await fetchHistory();
         await fetchDashboardStats();
       }
@@ -279,7 +466,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
   const fetchDocumentDetail = async (docId: string) => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/v1/documents/${docId}`);
+      const res = await fetch(getApiUrl(`/api/v1/documents/${docId}`));
       const data = await res.json();
       if (data.success) {
         setActiveDocData(data);
@@ -294,88 +481,172 @@ export function StudyProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     fetchDashboardStats();
-    fetchHistory();
-    fetchDocumentDetail('doc-1');
-  }, []);
+    if (isAuthenticated && user?.email) {
+      fetchHistory().then((lessons) => {
+        if (Array.isArray(lessons) && lessons.length > 0) {
+          fetchDocumentDetail(lessons[0].id);
+        } else {
+          setActiveDocData(null);
+        }
+      });
+    } else {
+      setHistoryList([]);
+      setActiveDocData(null);
+    }
+  }, [isAuthenticated, user?.email]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  const uploadDocument = async (file: File | null, language: string, depth: string, options: OutputOptions) => {
+  const uploadDocument = async (file: File | null, language: string, depth: string, options: OutputOptions, rawText?: string, fileName?: string) => {
     try {
       const formData = new FormData();
       if (file) formData.append('file', file);
+      if (rawText) formData.append('rawText', rawText);
+      if (fileName) formData.append('fileName', fileName);
       formData.append('language', language);
       formData.append('depth', depth);
       formData.append('options', JSON.stringify(options));
+      if (user?.email) {
+        formData.append('userEmail', user.email);
+      }
 
-      const res = await fetch('/api/v1/documents/upload', {
+      const res = await fetch(getApiUrl('/api/v1/documents/upload'), {
         method: 'POST',
+        headers: {
+          'x-user-email': user?.email || ''
+        },
         body: formData
       });
-      const data = await res.json();
+      
+      const parsed = await safeFetchJson(res);
 
-      if (data.success) {
+      if (parsed.ok && parsed.data) {
         showToast("Đã chuyển hóa tài liệu thành công!");
+        const newLessonItem: LessonHistoryItem = {
+          ...parsed.data.document,
+          studyPack: parsed.data.studyPack,
+          quizHistory: []
+        };
+        setHistoryList(prev => {
+          const list = Array.isArray(prev) ? prev : [];
+          const without = list.filter(item => item.id !== newLessonItem.id);
+          const updated = [newLessonItem, ...without];
+          if (user?.email) {
+            try {
+              localStorage.setItem(`studymind_cached_history_${user.email.toLowerCase()}`, JSON.stringify(updated));
+            } catch (e) {}
+          }
+          return updated;
+        });
         await fetchDashboardStats();
         await fetchHistory();
-        setActiveDocData({ document: data.document, studyPack: data.studyPack });
-        setActiveDocId(data.document.id);
+        setActiveDocData({ document: parsed.data.document, studyPack: parsed.data.studyPack });
+        setActiveDocId(parsed.data.document.id);
         setActiveTab('workspace');
+        return parsed.data;
+      } else {
+        showToast(parsed.errorMsg || "Lỗi tải tài liệu!");
+        return { success: false, error: parsed.errorMsg };
       }
-      return data;
-    } catch (err) {
+    } catch (err: any) {
       console.error("Upload document failed:", err);
-      showToast("Lỗi tải tài liệu!");
+      showToast(err?.message || "Lỗi tải tài liệu!");
     }
   };
 
   const processVideo = async (videoUrl: string) => {
     try {
-      const res = await fetch('/api/v1/documents/process-video', {
+      const res = await fetch(getApiUrl('/api/v1/documents/process-video'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ videoUrl })
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-user-email': user?.email || ''
+        },
+        body: JSON.stringify({ videoUrl, userEmail: user?.email || '' })
       });
-      const data = await res.json();
-      if (data.success) {
+      const parsed = await safeFetchJson(res);
+      if (parsed.ok && parsed.data) {
         showToast("📹 Đã trích xuất transcript từ Video!");
+        const newLessonItem: LessonHistoryItem = {
+          ...parsed.data.document,
+          studyPack: parsed.data.studyPack,
+          quizHistory: []
+        };
+        setHistoryList(prev => {
+          const list = Array.isArray(prev) ? prev : [];
+          const without = list.filter(item => item.id !== newLessonItem.id);
+          const updated = [newLessonItem, ...without];
+          if (user?.email) {
+            try {
+              localStorage.setItem(`studymind_cached_history_${user.email.toLowerCase()}`, JSON.stringify(updated));
+            } catch (e) {}
+          }
+          return updated;
+        });
         await fetchDashboardStats();
-        setActiveDocData({ document: data.document, studyPack: data.studyPack });
-        setActiveDocId(data.document.id);
+        await fetchHistory();
+        setActiveDocData({ document: parsed.data.document, studyPack: parsed.data.studyPack });
+        setActiveDocId(parsed.data.document.id);
         setActiveTab('workspace');
+      } else {
+        showToast(parsed.errorMsg || "Lỗi xử lý Video!");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Process video failed:", err);
+      showToast(err?.message || "Lỗi xử lý Video!");
     }
   };
 
   const processUrl = async (url: string) => {
     try {
-      const res = await fetch('/api/v1/documents/process-url', {
+      const res = await fetch(getApiUrl('/api/v1/documents/process-url'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url })
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-user-email': user?.email || ''
+        },
+        body: JSON.stringify({ url, userEmail: user?.email || '' })
       });
-      const data = await res.json();
-      if (data.success) {
+      const parsed = await safeFetchJson(res);
+      if (parsed.ok && parsed.data) {
         showToast("🔗 Đã trích xuất bài viết Web thành công!");
+        const newLessonItem: LessonHistoryItem = {
+          ...parsed.data.document,
+          studyPack: parsed.data.studyPack,
+          quizHistory: []
+        };
+        setHistoryList(prev => {
+          const list = Array.isArray(prev) ? prev : [];
+          const without = list.filter(item => item.id !== newLessonItem.id);
+          const updated = [newLessonItem, ...without];
+          if (user?.email) {
+            try {
+              localStorage.setItem(`studymind_cached_history_${user.email.toLowerCase()}`, JSON.stringify(updated));
+            } catch (e) {}
+          }
+          return updated;
+        });
         await fetchDashboardStats();
-        setActiveDocData({ document: data.document, studyPack: data.studyPack });
-        setActiveDocId(data.document.id);
+        await fetchHistory();
+        setActiveDocData({ document: parsed.data.document, studyPack: parsed.data.studyPack });
+        setActiveDocId(parsed.data.document.id);
         setActiveTab('workspace');
+      } else {
+        showToast(parsed.errorMsg || "Lỗi xử lý URL bài viết!");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Process URL failed:", err);
+      showToast(err?.message || "Lỗi xử lý URL bài viết!");
     }
   };
 
   // Mindmap Operations
   const addMindmapNode = async (nodeData: Partial<MindmapNode>) => {
     try {
-      const res = await fetch(`/api/v1/documents/${activeDocId}/mindmap/nodes`, {
+      const res = await fetch(getApiUrl(`/api/v1/documents/${activeDocId}/mindmap/nodes`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(nodeData)
@@ -392,7 +663,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
 
   const updateMindmapNode = async (nodeId: string, nodeData: Partial<MindmapNode>) => {
     try {
-      const res = await fetch(`/api/v1/documents/${activeDocId}/mindmap/nodes/${nodeId}`, {
+      const res = await fetch(getApiUrl(`/api/v1/documents/${activeDocId}/mindmap/nodes/${nodeId}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(nodeData)
@@ -409,7 +680,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
 
   const deleteMindmapNode = async (nodeId: string) => {
     try {
-      const res = await fetch(`/api/v1/documents/${activeDocId}/mindmap/nodes/${nodeId}`, {
+      const res = await fetch(getApiUrl(`/api/v1/documents/${activeDocId}/mindmap/nodes/${nodeId}`), {
         method: 'DELETE'
       });
       const data = await res.json();
@@ -425,7 +696,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
   // Flashcard Operations
   const addFlashcard = async (cardData: Partial<Flashcard>) => {
     try {
-      const res = await fetch(`/api/v1/documents/${activeDocId}/flashcards`, {
+      const res = await fetch(getApiUrl(`/api/v1/documents/${activeDocId}/flashcards`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(cardData)
@@ -442,7 +713,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
 
   const reviewFlashcard = async (cardId: string, rating: string) => {
     try {
-      const res = await fetch(`/api/v1/flashcards/${cardId}/review`, {
+      const res = await fetch(getApiUrl(`/api/v1/flashcards/${cardId}/review`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rating })
@@ -458,7 +729,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
 
   const deleteFlashcard = async (cardId: string) => {
     try {
-      const res = await fetch(`/api/v1/flashcards/${cardId}`, {
+      const res = await fetch(getApiUrl(`/api/v1/flashcards/${cardId}`), {
         method: 'DELETE'
       });
       const data = await res.json();
@@ -474,7 +745,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
   // Quiz Operations
   const addQuizQuestion = async (questionData: Partial<QuizQuestion>) => {
     try {
-      const res = await fetch(`/api/v1/documents/${activeDocId}/quiz/questions`, {
+      const res = await fetch(getApiUrl(`/api/v1/documents/${activeDocId}/quiz/questions`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(questionData)
@@ -491,7 +762,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
 
   const submitQuiz = async (quizId: string, answers: Record<string, number>) => {
     try {
-      const res = await fetch(`/api/v1/quiz/${quizId}/submit`, {
+      const res = await fetch(getApiUrl(`/api/v1/quiz/${quizId}/submit`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ answers })
@@ -509,7 +780,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
 
   const sendChatMessage = async (documentId: string, question: string, history: any[]) => {
     try {
-      const res = await fetch('/api/v1/chat/message', {
+      const res = await fetch(getApiUrl('/api/v1/chat/message'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ documentId, question, chatHistory: history })
@@ -525,7 +796,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
   const expandMindmapNodeAI = async (node: MindmapNode) => {
     try {
       showToast(`Đang mở rộng và phân tích sâu nút "${node.label}"...`);
-      const res = await fetch(`/api/v1/documents/${activeDocId}/mindmap/expand`, {
+      const res = await fetch(getApiUrl(`/api/v1/documents/${activeDocId}/mindmap/expand`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ node })
@@ -545,7 +816,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     const targetId = docId || activeDocId;
     try {
       showToast("Đang biên soạn 10-12 câu hỏi trắc nghiệm mới...");
-      const res = await fetch(`/api/v1/documents/${targetId}/regenerate-quiz`, {
+      const res = await fetch(getApiUrl(`/api/v1/documents/${targetId}/regenerate-quiz`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({})
@@ -573,7 +844,7 @@ export function StudyProvider({ children }: { children: ReactNode }) {
     const targetId = docId || activeDocId;
     try {
       showToast("Đang khởi tạo 10-12 Thẻ ghi nhớ mới...");
-      const res = await fetch(`/api/v1/documents/${targetId}/regenerate-flashcards`, {
+      const res = await fetch(getApiUrl(`/api/v1/documents/${targetId}/regenerate-flashcards`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({})
@@ -643,7 +914,10 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       signup,
       logout,
       updateUserProfile,
-      uploadAvatarFile
+      uploadAvatarFile,
+      fusionResult,
+      fusionLoading,
+      performKnowledgeFusion
     }}>
       {children}
     </StudyContext.Provider>

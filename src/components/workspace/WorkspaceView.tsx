@@ -7,9 +7,12 @@ import {
   Send, 
   Sparkles,
   RefreshCw,
-  FileText
+  FileText,
+  BookOpen
 } from 'lucide-react';
 import { useStudy } from '../../context/StudyContext';
+import { GuestGuard } from '../common/GuestGuard';
+import { NoActiveDocCard } from '../common/NoActiveDocCard';
 
 interface ChatMessage {
   sender: 'user' | 'ai';
@@ -19,6 +22,7 @@ interface ChatMessage {
 export function WorkspaceView() {
   const { 
     user,
+    isAuthenticated,
     activeDocData, 
     setActiveTab, 
     sendChatMessage, 
@@ -45,6 +49,26 @@ export function WorkspaceView() {
       ]);
     }
   }, [doc, user.fullName]);
+
+  if (!isAuthenticated) {
+    return (
+      <GuestGuard
+        featureTitle="Không gian Tài liệu & Trợ lý học tập AI"
+        featureDescription="Bạn đang ở chế độ khách. Để đảm bảo tính riêng tư, toàn bộ tóm tắt tài liệu, hệ thống ghi chú thông minh và trợ lý hỏi đáp AI chỉ hiển thị khi bạn đăng nhập tài khoản."
+        featureIcon={BookOpen}
+      />
+    );
+  }
+
+  if (!doc) {
+    return (
+      <NoActiveDocCard
+        featureName="Không gian tài liệu"
+        description="Hãy mở một bài học từ danh sách bài học đã lưu của bạn hoặc chuyển sang tab 'Nhập tài liệu' để tải lên bài học mới."
+        icon={BookOpen}
+      />
+    );
+  }
 
   const handleSendChat = async (queryText?: string) => {
     const textToSend = queryText || inputQuery;
@@ -174,19 +198,19 @@ export function WorkspaceView() {
           <div className="pt-4 flex flex-wrap gap-2 border-t border-slate-100">
             <button
               onClick={handleQuickCreateFlashcard}
-              className="bg-slate-900 hover:bg-black text-white text-[11px] font-semibold px-3.5 py-1.5 rounded-full flex items-center gap-1.5 transition-all"
+              className="bg-teal-50 hover:bg-[#CCFBF1] text-[#0F766E] border border-teal-200 text-[11px] font-semibold px-3.5 py-1.5 rounded-full flex items-center gap-1.5 transition-all shadow-2xs"
             >
               <span>Tạo Thẻ ghi nhớ</span>
             </button>
             <button
               onClick={() => handleSendChat(`Giải thích thuật ngữ và công thức chính trong ${doc?.title}`)}
-              className="bg-slate-900 hover:bg-black text-white text-[11px] font-semibold px-3.5 py-1.5 rounded-full flex items-center gap-1.5 transition-all"
+              className="bg-teal-50 hover:bg-[#CCFBF1] text-[#0F766E] border border-teal-200 text-[11px] font-semibold px-3.5 py-1.5 rounded-full flex items-center gap-1.5 transition-all shadow-2xs"
             >
               <span>Giải thích thuật ngữ</span>
             </button>
             <button
               onClick={handleQuickCreateMindmap}
-              className="bg-slate-900 hover:bg-black text-white text-[11px] font-semibold px-3.5 py-1.5 rounded-full flex items-center gap-1.5 transition-all"
+              className="bg-teal-50 hover:bg-[#CCFBF1] text-[#0F766E] border border-teal-200 text-[11px] font-semibold px-3.5 py-1.5 rounded-full flex items-center gap-1.5 transition-all shadow-2xs"
             >
               <span>Vẽ sơ đồ nhánh</span>
             </button>
@@ -205,22 +229,34 @@ export function WorkspaceView() {
           {/* Notes Content */}
           <div className="space-y-4">
             <h4 className="font-bold text-base text-[#111827]">
-              {pack?.notes?.summaryTitle || doc?.title || 'Tóm tắt nội dung bài học'}
+              {pack?.notes?.summaryTitle || (pack?.notes as any)?.title || doc?.title || 'Tóm tắt nội dung bài học'}
             </h4>
 
-            {pack?.notes?.sections?.map((sec, idx) => (
+            {(pack?.notes as any)?.summary && (
+              <p className="text-xs text-slate-600 leading-relaxed bg-teal-50/60 p-3 rounded-xl border border-teal-100/60">
+                {(pack?.notes as any).summary}
+              </p>
+            )}
+
+            {pack?.notes?.sections?.map((sec: any, idx) => (
               <div key={idx} className="space-y-2">
                 <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wide">
-                  {sec.heading}
+                  {sec.heading || sec.title}
                 </h5>
                 <ul className="space-y-2 text-xs text-[#111827]">
-                  {sec.items?.map((item, i) => (
+                  {sec.items && Array.isArray(sec.items) && sec.items.map((item: any, i: number) => (
                     <li key={i} className="flex gap-2 items-start">
                       <span className="w-1.5 h-1.5 rounded-full bg-[#0F766E] mt-1.5 shrink-0" />
                       <div>
-                        <strong className="font-semibold text-[#111827]">{item.label}: </strong>
-                        <span className="text-slate-600">{item.text}</span>
+                        {item.label && <strong className="font-semibold text-[#111827]">{item.label}: </strong>}
+                        <span className="text-slate-600">{item.text || (typeof item === 'string' ? item : '')}</span>
                       </div>
+                    </li>
+                  ))}
+                  {sec.points && Array.isArray(sec.points) && sec.points.map((pt: string, i: number) => (
+                    <li key={`pt-${i}`} className="flex gap-2 items-start">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#0F766E] mt-1.5 shrink-0" />
+                      <span className="text-slate-600">{pt}</span>
                     </li>
                   ))}
                 </ul>

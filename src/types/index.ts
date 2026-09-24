@@ -198,4 +198,36 @@ export interface LessonHistoryItem {
   quizHistory?: QuizHistoryRecord[];
 }
 
-export type TabType = 'dashboard' | 'import' | 'workspace' | 'mindmap' | 'flashcard' | 'quiz' | 'history' | 'auth';
+export interface KnowledgeConflict {
+  id: string;
+  topic: string;
+  docA: { id: string; title: string; statement: string };
+  docB: { id: string; title: string; statement: string };
+  explanation: string;
+  recommendation: string;
+}
+
+export interface UniqueInsight {
+  docId: string;
+  docTitle: string;
+  insights: string[];
+}
+
+export interface CommonConcept {
+  concept: string;
+  definition: string;
+  sources: string[];
+}
+
+export interface KnowledgeFusionResult {
+  fusionTitle: string;
+  unifiedSummary: string;
+  commonConcepts: CommonConcept[];
+  uniqueInsights: UniqueInsight[];
+  conflicts: KnowledgeConflict[];
+  mergedMindmap?: AIMindmap;
+  comparedDocs: { id: string; title: string }[];
+}
+
+export type TabType = 'dashboard' | 'import' | 'workspace' | 'mindmap' | 'flashcard' | 'quiz' | 'history' | 'fusion' | 'auth';
+

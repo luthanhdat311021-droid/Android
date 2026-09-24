@@ -1,144 +1,316 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 dotenv.config();
 
-const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const HISTORY_FILE_PATH = process.env.VERCEL 
+  ? path.join('/tmp', 'history_db.json') 
+  : path.join(__dirname, '..', 'history_db.json');
+
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://gwynjmlqymojrdlpzukn.supabase.co';
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_HdnEe4-ApmYewkEGVmab_Q_Gc-B1hqc';
 
 const isSupabaseConfigured = Boolean(
   supabaseUrl && 
   supabaseAnonKey && 
   !supabaseUrl.includes('your-project') &&
-  !supabaseUrl.includes('your_supabase')
+  !supabaseUrl.includes('your_supabase') &&
+  !supabaseAnonKey.includes('your-supabase') &&
+  !supabaseAnonKey.includes('your_supabase') &&
+  supabaseAnonKey.length > 20
 );
 
 export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
 
-// In-Memory Fallback Storage when Supabase is not yet configured
-const memoryHistoryStore = new Map();
+// Persistent Local Disk Storage & In-Memory Fallback
+function loadHistoryFromDisk() {
+  const map = new Map();
+  
+  // Default initial document
+  const defaultDoc = {
+    id: "doc-1",
+    title: "Sinh học Tế bào - Ty thể và Chu trình chuyển hóa",
+    fileType: "PDF",
+    fileSize: "2.4 MB",
+    pageCount: 15,
+    updatedAt: new Date().toISOString(),
+    status: "COMPLETED",
+    tags: ["Sinh học", "Tế bào", "Ty thể"],
+    rawText: "Ty thể (Mitochondria) là bào quan chuyển hóa năng lượng chính của tế bào nhân thực. Ty thể gồm 2 lớp màng: màng ngoài trơn nhẵn chứa protein porin, màng trong gấp nếp sâu tạo các mào (cristae) chứa phức hợp ATP Synthase và chuỗi truyền electron. Chất nền (matrix) của ty thể chứa ADN vòng kép trần và Ribosome 70S nhân sơ, chứng minh nguồn gốc nội cộng sinh.",
+    quizHistory: []
+  };
+
+  map.set(defaultDoc.id, defaultDoc);
+
+  try {
+    if (fs.existsSync(HISTORY_FILE_PATH)) {
+      const raw = fs.readFileSync(HISTORY_FILE_PATH, 'utf-8');
+      const list = JSON.parse(raw);
+      if (Array.isArray(list) && list.length > 0) {
+        list.forEach(item => {
+          if (item && item.id) {
+            map.set(item.id, item);
+          }
+        });
+      }
+    } else {
+      // Save default document to disk on first run
+      saveHistoryToDisk(map);
+    }
+  } catch (err) {
+    console.error("Failed to load history_db.json:", err.message);
+  }
+  return map;
+}
+
+function saveHistoryToDisk(storeMap) {
+  try {
+    const list = Array.from(storeMap.values());
+    fs.writeFileSync(HISTORY_FILE_PATH, JSON.stringify(list, null, 2), 'utf-8');
+  } catch (err) {
+    console.error("Failed to save history_db.json:", err.message);
+  }
+}
+
+const memoryHistoryStore = loadHistoryFromDisk();
 
 export const supabaseService = {
   isConfigured() {
     return isSupabaseConfigured;
   },
 
-  async getAllLessonHistory() {
+  async getAllLessonHistory(userEmail = null) {
+    if (!userEmail) {
+      return [];
+    }
+    const cleanEmail = userEmail.trim().toLowerCase();
+    let remoteItems = [];
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase
-          .from('lesson_history')
+          .from('learning_sessions')
           .select('*')
           .order('updated_at', { ascending: false });
 
-        if (error) {
-          console.warn('⚠️ [Supabase] Error fetching history, falling back to memory store:', error.message);
-          return Array.from(memoryHistoryStore.values());
+        if (!error && Array.isArray(data)) {
+          remoteItems = data
+            .map(item => {
+              const itemEmail = (item.structured_note?.userEmail || item.structured_note?.user_email || '').trim().toLowerCase();
+              return {
+                id: item.id,
+                userId: itemEmail || 'usr-1',
+                userEmail: itemEmail,
+                title: item.title || item.source_name || 'Bài học chưa đặt tên',
+                fileType: (item.input_type || 'PDF').toUpperCase(),
+                fileSize: '1.5 MB',
+                pageCount: 5,
+                duration: '15 phút',
+                updatedAt: item.updated_at || item.created_at || new Date().toISOString(),
+                createdAt: item.created_at || new Date().toISOString(),
+                status: 'COMPLETED',
+                tags: [item.input_type ? item.input_type.toUpperCase() : 'TÀI LIỆU'],
+                rawText: item.structured_note?.summary || '',
+                studyPack: {
+                  notes: item.structured_note,
+                  note: item.structured_note,
+                  mindmap: item.mindmap,
+                  flashcards: item.flashcards || [],
+                  quiz: item.quiz || []
+                },
+                quizHistory: []
+              };
+            })
+            .filter(item => {
+              if (item.userEmail === cleanEmail) return true;
+              if (!item.userEmail && cleanEmail === 'demo@studymind.ai') return true;
+              return false;
+            });
+        } else if (error) {
+          console.warn('⚠️ [Supabase] Error fetching learning_sessions, fallback to disk store:', error.message);
         }
-
-        return data.map(item => ({
-          id: item.id,
-          userId: item.user_id,
-          title: item.title,
-          fileType: item.file_type,
-          fileSize: item.file_size,
-          pageCount: item.page_count,
-          duration: item.duration,
-          updatedAt: item.updated_at || item.created_at,
-          status: item.status || 'COMPLETED',
-          tags: item.tags || [],
-          rawText: item.raw_text,
-          studyPack: item.study_pack,
-          quizHistory: item.quiz_history || []
-        }));
       } catch (err) {
         console.error('❌ [Supabase Exception]:', err.message);
       }
     }
 
-    // Fallback in-memory
-    return Array.from(memoryHistoryStore.values());
+    // Merge remoteItems with local memory/disk store for this user
+    const map = new Map();
+    for (const [k, v] of memoryHistoryStore.entries()) {
+      const vEmail = (v.userEmail || v.userId || '').trim().toLowerCase();
+      if (vEmail === cleanEmail || (!vEmail && cleanEmail === 'demo@studymind.ai')) {
+        map.set(k, v);
+      }
+    }
+
+    remoteItems.forEach(item => {
+      const local = map.get(item.id);
+      if (local && local.quizHistory && local.quizHistory.length > 0) {
+        item.quizHistory = local.quizHistory;
+      }
+      map.set(item.id, item);
+      memoryHistoryStore.set(item.id, item);
+    });
+
+    saveHistoryToDisk(memoryHistoryStore);
+
+    const mergedList = Array.from(map.values()).sort((a, b) => {
+      const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
+      const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+      return timeB - timeA;
+    });
+
+    return mergedList;
   },
 
   async getLessonHistoryById(id) {
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase
-          .from('lesson_history')
+          .from('learning_sessions')
           .select('*')
           .eq('id', id)
-          .single();
+          .maybeSingle();
 
         if (!error && data) {
-          return {
+          const itemEmail = (data.structured_note?.userEmail || data.structured_note?.user_email || '').trim().toLowerCase();
+          const item = {
             id: data.id,
-            userId: data.user_id,
-            title: data.title,
-            fileType: data.file_type,
-            fileSize: data.file_size,
-            pageCount: data.page_count,
-            duration: data.duration,
-            updatedAt: data.updated_at,
-            status: data.status,
-            tags: data.tags || [],
-            rawText: data.raw_text,
-            studyPack: data.study_pack,
-            quizHistory: data.quiz_history || []
+            userId: itemEmail || 'usr-1',
+            userEmail: itemEmail,
+            title: data.title || data.source_name || 'Bài học',
+            fileType: (data.input_type || 'PDF').toUpperCase(),
+            fileSize: '1.5 MB',
+            pageCount: 5,
+            duration: '15 phút',
+            updatedAt: data.updated_at || data.created_at || new Date().toISOString(),
+            createdAt: data.created_at || new Date().toISOString(),
+            status: 'COMPLETED',
+            tags: [data.input_type ? data.input_type.toUpperCase() : 'TÀI LIỆU'],
+            rawText: data.structured_note?.summary || '',
+            studyPack: {
+              notes: data.structured_note,
+              note: data.structured_note,
+              mindmap: data.mindmap,
+              flashcards: data.flashcards || [],
+              quiz: data.quiz || []
+            },
+            quizHistory: []
           };
+          memoryHistoryStore.set(item.id, item);
+          return item;
         }
       } catch (err) {
-        console.warn(`⚠️ [Supabase] Could not fetch doc ${id}:`, err.message);
+        console.warn(`⚠️ [Supabase] Could not fetch session ${id}:`, err.message);
       }
     }
 
     return memoryHistoryStore.get(id) || null;
   },
 
-  async saveLessonHistory(documentItem, studyPack = null) {
-    const payload = {
-      id: documentItem.id,
-      user_id: documentItem.userId || 'usr-1',
-      title: documentItem.title,
-      file_type: documentItem.fileType,
-      file_size: documentItem.fileSize || null,
-      page_count: documentItem.pageCount || null,
-      duration: documentItem.duration || null,
-      raw_text: documentItem.rawText || '',
-      tags: documentItem.tags || ['Bài học mới'],
-      status: documentItem.status || 'COMPLETED',
-      study_pack: studyPack || null,
-      updated_at: new Date().toISOString()
+  async saveLessonHistory(documentItem, studyPack = null, userEmail = null) {
+    const nowIso = new Date().toISOString();
+    const cleanUserEmail = (userEmail || documentItem.userEmail || '').trim().toLowerCase();
+
+    // Resolve note data properly (check notes, note, or generate valid structure to satisfy NOT NULL constraint)
+    const rawNote = studyPack?.notes || studyPack?.note;
+    const noteData = (rawNote && typeof rawNote === 'object') ? { ...rawNote } : {
+      summaryTitle: documentItem.title || 'Tóm tắt bài học',
+      summary: documentItem.rawText ? documentItem.rawText.slice(0, 300) : 'Tài liệu học tập tổng hợp từ người dùng.',
+      sections: [
+        {
+          heading: '1. Nội dung trọng tâm',
+          points: [documentItem.rawText ? documentItem.rawText.slice(0, 200) : 'Nội dung cốt lõi của bài học.'],
+          items: [
+            { label: 'Tổng quan', text: documentItem.rawText ? documentItem.rawText.slice(0, 200) : 'Nội dung cốt lõi của bài học.' }
+          ]
+        }
+      ],
+      keyConcepts: []
     };
 
-    // Update in-memory fallback
+    if (cleanUserEmail) {
+      noteData.userEmail = cleanUserEmail;
+    }
+
+    // Normalize mindmap data
+    const mindmapData = studyPack?.mindmap || {
+      rootLabel: documentItem.title || 'Chủ đề học tập',
+      nodes: [
+        { id: 'root', label: documentItem.title || 'Chủ đề', level: 0 }
+      ]
+    };
+
+    // Normalize flashcards and quiz
+    const flashcardsData = Array.isArray(studyPack?.flashcards) ? studyPack.flashcards : [];
+    const quizData = Array.isArray(studyPack?.quiz) 
+      ? studyPack.quiz 
+      : (studyPack?.quiz?.questions && Array.isArray(studyPack.quiz.questions))
+        ? studyPack.quiz.questions
+        : [];
+
+    const validCreatedAt = (documentItem.createdAt && !documentItem.createdAt.includes('Vừa') && !isNaN(Date.parse(documentItem.createdAt)))
+      ? new Date(documentItem.createdAt).toISOString()
+      : nowIso;
+
+    const payload = {
+      id: documentItem.id,
+      title: documentItem.title || 'Bài học mới',
+      created_at: validCreatedAt,
+      input_type: documentItem.fileType ? documentItem.fileType.toLowerCase() : 'pdf',
+      source_name: documentItem.title || 'Bài học mới',
+      structured_note: noteData,
+      mindmap: mindmapData,
+      flashcards: flashcardsData,
+      quiz: quizData,
+      updated_at: nowIso
+    };
+
+    // Update in-memory & disk storage immediately
     const existing = memoryHistoryStore.get(documentItem.id) || {};
-    memoryHistoryStore.set(documentItem.id, {
+    const updatedItem = {
       ...existing,
       ...documentItem,
-      studyPack: studyPack || existing.studyPack || null,
-      quizHistory: existing.quizHistory || [],
-      updatedAt: payload.updated_at
-    });
+      userEmail: cleanUserEmail || existing.userEmail || null,
+      updatedAt: nowIso,
+      createdAt: validCreatedAt,
+      studyPack: {
+        notes: noteData,
+        note: noteData,
+        mindmap: mindmapData,
+        flashcards: flashcardsData,
+        quiz: quizData,
+        ...(studyPack || {})
+      },
+      quizHistory: existing.quizHistory || []
+    };
+
+    memoryHistoryStore.set(documentItem.id, updatedItem);
+    saveHistoryToDisk(memoryHistoryStore);
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data, error } = await supabase
-          .from('lesson_history')
+        const { error } = await supabase
+          .from('learning_sessions')
           .upsert(payload, { onConflict: 'id' });
 
         if (error) {
           console.warn('⚠️ [Supabase] Save error:', error.message);
         } else {
-          console.log(`✅ [Supabase] Saved lesson history for ${documentItem.id}`);
+          console.log(`✅ [Supabase] Saved lesson to learning_sessions for ${documentItem.id}`);
         }
       } catch (err) {
         console.error('❌ [Supabase Exception on Save]:', err.message);
       }
     }
 
-    return memoryHistoryStore.get(documentItem.id);
+    return updatedItem;
   },
 
   async recordQuizResult(docId, score, correctCount, totalQuestions, feedback) {
@@ -151,49 +323,13 @@ export const supabaseService = {
       feedback
     };
 
-    // In-memory update
+    // In-memory & disk update
     const lesson = memoryHistoryStore.get(docId);
     if (lesson) {
       lesson.quizHistory = lesson.quizHistory || [];
       lesson.quizHistory.unshift(quizAttempt);
       lesson.updatedAt = quizAttempt.completedAt;
-    }
-
-    if (isSupabaseConfigured && supabase) {
-      try {
-        // Fetch current quiz_history array
-        const { data } = await supabase
-          .from('lesson_history')
-          .select('quiz_history')
-          .eq('id', docId)
-          .single();
-
-        const currentHistory = (data && data.quiz_history) || [];
-        const updatedHistory = [quizAttempt, ...currentHistory];
-
-        await supabase
-          .from('lesson_history')
-          .update({
-            quiz_history: updatedHistory,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', docId);
-
-        // Record in study_activities
-        await supabase
-          .from('study_activities')
-          .insert({
-            user_id: 'usr-1',
-            document_id: docId,
-            activity_type: 'QUIZ_SUBMITTED',
-            description: `Hoàn thành bài Quiz với kết quả ${score}% (${correctCount}/${totalQuestions})`,
-            score
-          });
-
-        console.log(`✅ [Supabase] Recorded quiz result (${score}%) for doc ${docId}`);
-      } catch (err) {
-        console.warn('⚠️ [Supabase] Failed to record quiz result:', err.message);
-      }
+      saveHistoryToDisk(memoryHistoryStore);
     }
 
     return quizAttempt;
@@ -201,18 +337,19 @@ export const supabaseService = {
 
   async deleteLessonHistory(id) {
     memoryHistoryStore.delete(id);
+    saveHistoryToDisk(memoryHistoryStore);
 
     if (isSupabaseConfigured && supabase) {
       try {
         const { error } = await supabase
-          .from('lesson_history')
+          .from('learning_sessions')
           .delete()
           .eq('id', id);
 
         if (error) {
           console.warn(`⚠️ [Supabase] Error deleting ${id}:`, error.message);
         } else {
-          console.log(`✅ [Supabase] Deleted lesson ${id}`);
+          console.log(`✅ [Supabase] Deleted session ${id}`);
         }
       } catch (err) {
         console.error('❌ [Supabase Exception on Delete]:', err.message);

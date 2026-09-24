@@ -10,6 +10,7 @@ import { MindmapView } from './components/mindmap/MindmapView';
 import { FlashcardView } from './components/flashcard/FlashcardView';
 import { QuizView } from './components/quiz/QuizView';
 import { HistoryView } from './components/history/HistoryView';
+import { KnowledgeFusionView } from './components/fusion/KnowledgeFusionView';
 import { AuthView } from './components/auth/AuthView';
 import { EditProfileModal } from './components/auth/EditProfileModal';
 import { Toast } from './components/common/Toast';
@@ -82,6 +83,7 @@ function MainLayout() {
             {activeTab === 'dashboard' && <DashboardView />}
             {activeTab === 'import' && <ImportView />}
             {activeTab === 'history' && <HistoryView />}
+            {activeTab === 'fusion' && <KnowledgeFusionView />}
             {activeTab === 'workspace' && <WorkspaceView />}
             {activeTab === 'mindmap' && <MindmapView />}
             {activeTab === 'flashcard' && <FlashcardView />}

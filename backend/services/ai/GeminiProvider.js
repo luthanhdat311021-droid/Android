@@ -38,6 +38,9 @@ export class GeminiProvider extends AIProvider {
       } catch (err) {
         lastError = err;
         console.warn(`⚠️ [GeminiProvider ${modelName}] Attempt failed: ${err.message}`);
+        if (err.message?.includes('401') || err.message?.includes('invalid authentication') || err.message?.includes('API_KEY')) {
+          break;
+        }
       }
     }
     throw new Error(`All Gemini models failed. Last error: ${lastError?.message}`);
@@ -130,5 +133,15 @@ export class GeminiProvider extends AIProvider {
     const { text, modelName } = await this.executeGeminiCall(prompt);
     aiLogger.log({ task: 'chat', provider: this.name, model: modelName, latencyMs: Date.now() - startTime, status: 'SUCCESS' });
     return text;
+  }
+
+  async analyzeFusion(documents) {
+    const startTime = Date.now();
+    const prompt = PromptManager.getKnowledgeFusionPrompt(documents);
+    const { text, modelName } = await this.executeGeminiCall(prompt);
+    const cleanJsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    const rawObj = JSON.parse(cleanJsonStr);
+    aiLogger.log({ task: 'knowledge_fusion', provider: this.name, model: modelName, latencyMs: Date.now() - startTime, status: 'SUCCESS' });
+    return rawObj;
   }
 }

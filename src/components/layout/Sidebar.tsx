@@ -9,6 +9,7 @@ import {
   BrainCircuit,
   Sparkles,
   History,
+  GitCompare,
   LogIn,
   LogOut
 } from 'lucide-react';

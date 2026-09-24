@@ -22,13 +22,17 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// Storage setup for uploads
-const uploadDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+// Storage setup for uploads (Use /tmp on Vercel Serverless)
+const uploadDir = process.env.VERCEL ? path.join('/tmp', 'uploads') : path.join(__dirname, 'uploads');
+try {
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+} catch (e) {
+  console.warn("Upload dir creation warning:", e.message);
 }
 
 const storage = multer.diskStorage({
@@ -48,7 +52,7 @@ const upload = multer({
 const jobs = new Map();
 
 // File Persistence Path for User Accounts
-const USERS_FILE_PATH = path.join(__dirname, 'users_db.json');
+const USERS_FILE_PATH = process.env.VERCEL ? path.join('/tmp', 'users_db.json') : path.join(__dirname, 'users_db.json');
 
 function loadUsersFromDisk() {
   const defaultMap = new Map([
@@ -125,22 +129,42 @@ const db = {
   studyPacks: {}
 };
 
-// Initialize default Knowledge Base & StudyPack if documents exist
-(async () => {
-  try {
-    const defaultDoc = db.documents[0];
-    if (defaultDoc) {
-      const knowledgeBase = await aiRouter.analyzeDocument(defaultDoc.rawText, { title: defaultDoc.title });
-      const notes = await aiRouter.generateNotes(knowledgeBase);
-      const mindmap = await aiRouter.generateMindmap(knowledgeBase);
-      const flashcards = await aiRouter.generateFlashcards(knowledgeBase);
-      const quiz = await aiRouter.generateQuiz(knowledgeBase);
-      db.studyPacks[defaultDoc.id] = { knowledgeBase, notes, mindmap, flashcards, quiz };
-    }
-  } catch (err) {
-    console.warn("Initial StudyPack generation warning:", err.message);
-  }
-})();
+// Pre-populate default StudyPack synchronously to prevent cold-start timeout in serverless environments (e.g. Vercel)
+const defaultKnowledgeBase = {
+  title: defaultDoc1.title,
+  summary: "Ty thể là bào quan chuyển hóa năng lượng chính của tế bào nhân thực với màng kép và chuỗi truyền electron.",
+  topics: ["Cấu trúc mào ty thể", "Chu trình Krebs & Hô hấp", "ADN ty thể & Nguồn gốc"],
+  concepts: [
+    { name: "Ty thể (Mitochondria)", description: "Bào quan sản xuất năng lượng ATP chính của tế bào.", type: "core", importance: 5 },
+    { name: "Cristae (Mào)", description: "Nếp gấp màng trong chứa phức hợp ATP Synthase.", type: "structure", importance: 4 },
+    { name: "Chu trình Krebs", description: "Chuỗi phản ứng sinh hóa chuyển hóa pyruvate thành năng lượng.", type: "process", importance: 4 }
+  ]
+};
+
+try {
+  db.studyPacks[defaultDoc1.id] = {
+    knowledgeBase: defaultKnowledgeBase,
+    notes: {
+      title: defaultDoc1.title,
+      summary: defaultKnowledgeBase.summary,
+      sections: [
+        { heading: "I. Cấu trúc Ty thể", content: "Màng ngoài trơn nhẵn, màng trong gấp nếp tạo các cristae nâng cao diện tích bề mặt." },
+        { heading: "II. Chức năng Sinh học", content: "Tổng hợp ATP qua hô hấp tế bào và chuỗi truyền electron." }
+      ]
+    },
+    mindmap: aiRouter.generateDomainFallbackMindmap(defaultKnowledgeBase),
+    flashcards: [
+      { id: "fc_001", front: "Ty thể có bao nhiêu lớp màng?", back: "Ty thể có 2 lớp màng (màng ngoài và màng trong gấp nếp).", difficulty: "easy", importance: 5 },
+      { id: "fc_002", front: "Bào quan nào tổng hợp ATP chính?", back: "Ty thể (Mitochondria).", difficulty: "easy", importance: 5 }
+    ],
+    quiz: [
+      { id: "q_001", question: "Màng trong ty thể gấp nếp tạo thành cấu trúc gì?", options: ["Cristae (Mào)", "Ribosome", "Porin", "Lưới nội chất"], correctAnswer: 0, explanation: "Màng trong gấp nếp tạo cristae chứa ATP Synthase." }
+    ]
+  };
+} catch (err) {
+  console.warn("Synchronous initial StudyPack assignment warning:", err.message);
+}
+
 
 // ==================== REST API ENDPOINTS ==================== //
 
@@ -210,14 +234,22 @@ app.post('/api/v1/auth/login', (req, res) => {
     const cleanEmail = email.trim().toLowerCase();
 
     db.users = loadUsersFromDisk();
-    const user = db.users.get(cleanEmail);
+    let user = db.users.get(cleanEmail);
 
-    // Require account to be registered first
     if (!user) {
-      return res.status(400).json({ 
-        success: false, 
-        error: "Tài khoản chưa tồn tại. Vui lòng chọn 'Đăng ký tài khoản' để tạo tài khoản mới!" 
-      });
+      user = {
+        id: `usr-${Date.now()}`,
+        fullName: cleanEmail.split('@')[0],
+        email: cleanEmail,
+        membershipTier: "Basic",
+        avatarUrl: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80",
+        studyGoalHours: 5.0,
+        currentStudyHours: 0,
+        quizTargetCount: 50,
+        currentQuizCount: 0
+      };
+      db.users.set(cleanEmail, user);
+      saveUsersToDisk();
     }
 
     db.currentUser = user;
@@ -301,33 +333,78 @@ app.get('/api/v1/auth/me', (req, res) => {
   res.json({ success: true, user: activeUser });
 });
 
-app.get('/api/v1/user/stats', (req, res) => {
+app.get('/api/v1/user/stats', async (req, res) => {
+  const reqEmail = req.headers['x-user-email'] || req.query.email || null;
   const activeUser = getActiveUser(req);
+  const lessons = reqEmail ? await supabaseService.getAllLessonHistory(reqEmail) : [];
+  const docList = lessons.map(l => ({
+    id: l.id,
+    title: l.title,
+    fileType: l.fileType,
+    fileSize: l.fileSize,
+    pageCount: l.pageCount,
+    updatedAt: l.updatedAt,
+    status: l.status,
+    tags: l.tags
+  }));
   res.json({
     success: true,
     data: {
-      totalDocuments: db.documents.length + 22,
-      weeklyDocAdded: 3,
-      flashcardProgress: "152/240",
-      retentionRatePercentage: 78,
-      averageQuizScore: "8.5/10",
-      quizScoreDiff: "+0.4 điểm so với tháng trước",
+      totalDocuments: docList.length,
+      weeklyDocAdded: Math.min(docList.length, 3),
+      flashcardProgress: docList.length > 0 ? `${docList.length * 10}/${docList.length * 15}` : "0/0",
+      retentionRatePercentage: docList.length > 0 ? 85 : 0,
+      averageQuizScore: docList.length > 0 ? "8.5/10" : "0/10",
+      quizScoreDiff: docList.length > 0 ? "+0.4 điểm so với tháng trước" : "Chưa có dữ liệu",
       weeklyHours: { current: activeUser.currentStudyHours || 0, target: activeUser.studyGoalHours || 5.0 },
       weeklyQuizCount: { current: activeUser.currentQuizCount || 0, target: activeUser.quizTargetCount || 50 },
-      recentDocuments: db.documents,
-      spacedRepetitionItems: db.spacedRepetition,
-      recentActivities: db.activities
+      recentDocuments: docList,
+      spacedRepetitionItems: [],
+      recentActivities: []
     }
   });
 });
 
-app.get('/api/v1/documents', (req, res) => {
-  res.json({ success: true, documents: db.documents });
+app.get('/api/v1/documents', async (req, res) => {
+  const reqEmail = req.headers['x-user-email'] || req.query.email || null;
+  const lessons = reqEmail ? await supabaseService.getAllLessonHistory(reqEmail) : [];
+  const docList = lessons.map(l => ({
+    id: l.id,
+    title: l.title,
+    fileType: l.fileType,
+    fileSize: l.fileSize,
+    pageCount: l.pageCount,
+    updatedAt: l.updatedAt,
+    status: l.status,
+    tags: l.tags
+  }));
+  res.json({ success: true, documents: docList });
 });
 
-app.get('/api/v1/documents/:id', (req, res) => {
-  const doc = db.documents.find(d => d.id === req.params.id) || db.documents[0] || null;
-  const studyPack = doc ? (db.studyPacks[doc.id] || null) : null;
+app.get('/api/v1/documents/:id', async (req, res) => {
+  let doc = db.documents.find(d => d.id === req.params.id);
+  let studyPack = doc ? (db.studyPacks[doc.id] || null) : null;
+
+  if (!doc || !studyPack) {
+    const lesson = await supabaseService.getLessonHistoryById(req.params.id);
+    if (lesson) {
+      doc = {
+        id: lesson.id,
+        title: lesson.title,
+        fileType: lesson.fileType,
+        fileSize: lesson.fileSize,
+        pageCount: lesson.pageCount,
+        updatedAt: lesson.updatedAt,
+        status: lesson.status,
+        tags: lesson.tags,
+        rawText: lesson.rawText
+      };
+      studyPack = lesson.studyPack;
+    }
+  }
+
+  doc = doc || db.documents[0] || null;
+  studyPack = studyPack || (doc ? db.studyPacks[doc.id] : null);
   res.json({ success: true, document: doc, studyPack });
 });
 
@@ -452,11 +529,15 @@ app.post('/api/ai/chat', async (req, res) => {
 app.post('/api/v1/documents/upload', upload.single('file'), async (req, res) => {
   try {
     const file = req.file;
-    const { options } = req.body;
+    const { options, rawText, fileName } = req.body;
     const parsedOptions = options ? JSON.parse(options) : {};
     
     const newDocId = `doc-${Date.now()}`;
-    const docTitle = file ? file.originalname.replace(/\.[^/.]+$/, "") : "Tài liệu mới";
+    const docTitle = file 
+      ? file.originalname.replace(/\.[^/.]+$/, "") 
+      : (fileName 
+          ? fileName.replace(/\.[^/.]+$/, "") 
+          : (rawText ? (rawText.trim().slice(0, 30) + '...') : "Tài liệu mới"));
     const jobId = `job-${Date.now()}`;
 
     // Create Job entry
@@ -470,7 +551,7 @@ app.post('/api/v1/documents/upload', upload.single('file'), async (req, res) => 
     if (file) {
       result = await processFileAndGenerate(file.path, file.originalname, file.mimetype, parsedOptions, updateJob);
     } else {
-      const defaultText = "Tài liệu học tập tổng hợp từ người dùng.";
+      const defaultText = rawText && rawText.trim() ? rawText.trim() : "Tài liệu học tập tổng hợp từ người dùng.";
       const knowledgeBase = await aiRouter.analyzeDocument(defaultText, { title: docTitle });
       const notes = await aiRouter.generateNotes(knowledgeBase);
       const mindmap = await aiRouter.generateMindmap(knowledgeBase);
@@ -484,13 +565,19 @@ app.post('/api/v1/documents/upload', upload.single('file'), async (req, res) => 
       updateJob(100, 'Completed');
     }
 
+    const userEmail = req.headers['x-user-email'] || req.body.userEmail || null;
+    const nowIso = new Date().toISOString();
+    const extFromFileName = fileName ? fileName.split('.').pop().toUpperCase() : 'DOCX';
     const newDoc = {
       id: newDocId,
+      userEmail: userEmail ? userEmail.trim().toLowerCase() : null,
+      userId: userEmail ? userEmail.trim().toLowerCase() : null,
       title: docTitle,
-      fileType: file ? file.originalname.split('.').pop().toUpperCase() : 'PDF',
-      fileSize: file ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : '2.0 MB',
-      pageCount: 10,
-      updatedAt: 'Vừa xong',
+      fileType: file ? file.originalname.split('.').pop().toUpperCase() : extFromFileName,
+      fileSize: file ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : '1.5 MB',
+      pageCount: 1,
+      updatedAt: nowIso,
+      createdAt: nowIso,
       status: 'COMPLETED',
       tags: ['AI Analysis Engine'],
       rawText: result.extractedText
@@ -500,7 +587,7 @@ app.post('/api/v1/documents/upload', upload.single('file'), async (req, res) => 
     db.studyPacks[newDocId] = result.studyPack;
 
     // Sync to Supabase Lesson History
-    await supabaseService.saveLessonHistory(newDoc, result.studyPack);
+    await supabaseService.saveLessonHistory(newDoc, result.studyPack, userEmail);
 
     res.json({
       success: true,
@@ -511,7 +598,7 @@ app.post('/api/v1/documents/upload', upload.single('file'), async (req, res) => 
     });
   } catch (err) {
     console.error("Upload error:", err);
-    res.status(500).json({ success: false, error: "Lỗi xử lý tài liệu" });
+    res.status(500).json({ success: false, error: err?.message || "Lỗi xử lý tài liệu" });
   }
 });
 
@@ -523,7 +610,9 @@ app.post('/api/v1/documents/process-video', async (req, res) => {
     const rawText = typeof extracted === 'object' ? extracted.text : extracted;
     const docTitle = typeof extracted === 'object' ? extracted.title : (videoUrl ? `Video (${videoUrl.slice(0, 25)}...)` : "Video học tập");
     
+    const userEmail = req.headers['x-user-email'] || req.body.userEmail || null;
     const newDocId = `doc-${Date.now()}`;
+    const nowIso = new Date().toISOString();
     const knowledgeBase = await aiRouter.analyzeDocument(rawText, { title: docTitle });
     const notes = await aiRouter.generateNotes(knowledgeBase);
     const mindmap = await aiRouter.generateMindmap(knowledgeBase);
@@ -532,10 +621,13 @@ app.post('/api/v1/documents/process-video', async (req, res) => {
 
     const newDoc = {
       id: newDocId,
+      userEmail: userEmail ? userEmail.trim().toLowerCase() : null,
+      userId: userEmail ? userEmail.trim().toLowerCase() : null,
       title: docTitle,
       fileType: 'VIDEO',
       duration: 'Phân tích tự động',
-      updatedAt: 'Vừa xong',
+      updatedAt: nowIso,
+      createdAt: nowIso,
       status: 'COMPLETED',
       tags: ['YouTube Speech-to-Text'],
       rawText: rawText
@@ -545,7 +637,7 @@ app.post('/api/v1/documents/process-video', async (req, res) => {
     db.studyPacks[newDocId] = { knowledgeBase, notes, mindmap, flashcards, quiz };
 
     // Sync to Supabase Lesson History
-    await supabaseService.saveLessonHistory(newDoc, db.studyPacks[newDocId]);
+    await supabaseService.saveLessonHistory(newDoc, db.studyPacks[newDocId], userEmail);
 
     res.json({ success: true, document: newDoc, studyPack: db.studyPacks[newDocId] });
   } catch (err) {
@@ -562,7 +654,9 @@ app.post('/api/v1/documents/process-url', async (req, res) => {
     const rawText = typeof extracted === 'object' ? extracted.text : extracted;
     const docTitle = typeof extracted === 'object' ? extracted.title : (url ? `Web (${url.slice(0, 25)}...)` : "Nghiên cứu Web");
     
+    const userEmail = req.headers['x-user-email'] || req.body.userEmail || null;
     const newDocId = `doc-${Date.now()}`;
+    const nowIso = new Date().toISOString();
     const knowledgeBase = await aiRouter.analyzeDocument(rawText, { title: docTitle });
     const notes = await aiRouter.generateNotes(knowledgeBase);
     const mindmap = await aiRouter.generateMindmap(knowledgeBase);
@@ -571,9 +665,12 @@ app.post('/api/v1/documents/process-url', async (req, res) => {
 
     const newDoc = {
       id: newDocId,
+      userEmail: userEmail ? userEmail.trim().toLowerCase() : null,
+      userId: userEmail ? userEmail.trim().toLowerCase() : null,
       title: docTitle,
       fileType: 'URL',
-      updatedAt: 'Vừa xong',
+      updatedAt: nowIso,
+      createdAt: nowIso,
       status: 'COMPLETED',
       tags: ['Web Article Extractor'],
       rawText: rawText
@@ -583,7 +680,7 @@ app.post('/api/v1/documents/process-url', async (req, res) => {
     db.studyPacks[newDocId] = { knowledgeBase, notes, mindmap, flashcards, quiz };
 
     // Sync to Supabase Lesson History
-    await supabaseService.saveLessonHistory(newDoc, db.studyPacks[newDocId]);
+    await supabaseService.saveLessonHistory(newDoc, db.studyPacks[newDocId], userEmail);
 
     res.json({ success: true, document: newDoc, studyPack: db.studyPacks[newDocId] });
   } catch (err) {
@@ -781,10 +878,18 @@ app.post('/api/v1/quiz/:id/submit', (req, res) => {
 // 📚 LESSON HISTORY & SUPABASE ENDPOINTS
 // ==========================================
 
-// Get all lesson history
+// Get all lesson history for current authenticated user
 app.get('/api/v1/history', async (req, res) => {
   try {
-    const historyList = await supabaseService.getAllLessonHistory();
+    const userEmail = req.headers['x-user-email'] || req.query.email || null;
+    if (!userEmail) {
+      return res.json({
+        success: true,
+        isSupabaseActive: supabaseService.isConfigured(),
+        data: []
+      });
+    }
+    const historyList = await supabaseService.getAllLessonHistory(userEmail);
     res.json({
       success: true,
       isSupabaseActive: supabaseService.isConfigured(),
@@ -827,13 +932,37 @@ app.delete('/api/v1/history/:id', async (req, res) => {
   }
 });
 
-app.post('/api/v1/chat/message', async (req, res) => {
-  const { documentId, question, chatHistory } = req.body;
-  const doc = db.documents.find(d => d.id === documentId) || db.documents[0];
-  
-  const reply = await answerStudyQuery(doc.title, doc.rawText || '', question, chatHistory);
-  
-  res.json({ success: true, answer: reply });
+// ==========================================
+// 🧬 MULTI-DOCUMENT KNOWLEDGE FUSION ENDPOINT
+// ==========================================
+app.post('/api/v1/fusion/analyze', async (req, res) => {
+  try {
+    const { documentIds } = req.body;
+    if (!documentIds || !Array.isArray(documentIds) || documentIds.length < 2) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "Vui lòng chọn ít nhất 2 tài liệu để thực hiện hợp nhất và so sánh." 
+      });
+    }
+
+    // Fetch selected documents from memory or Supabase history
+    const allHistory = await supabaseService.getAllLessonHistory();
+    const selectedDocs = documentIds.map(id => {
+      const foundMem = db.documents.find(d => d.id === id);
+      if (foundMem) return foundMem;
+      const foundHist = allHistory.find(h => h.id === id);
+      if (foundHist) return foundHist;
+      return { id, title: `Tài liệu ${id}`, rawText: "", tags: ["Tài liệu"] };
+    });
+
+    // Call real AI Knowledge Fusion Engine
+    const fusionResult = await aiRouter.analyzeFusion(selectedDocs);
+
+    res.json({ success: true, data: fusionResult });
+  } catch (err) {
+    console.error("Fusion analysis error:", err);
+    res.status(500).json({ success: false, error: "Lỗi trong quá trình hợp nhất tài liệu." });
+  }
 });
 
 // ==========================================
@@ -893,11 +1022,15 @@ app.post('/api/v1/auth/logout', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`====================================================`);
-  console.log(`🚀 StudyMind AI Multi-Provider Engine running on port ${PORT}`);
-  console.log(`🤖 Gemini Multimodal: Active for Long Docs, Vision & Structure`);
-  console.log(`⚡ Groq LPU Engine: Active for Fast Reasoning & Chat`);
-  console.log(`📡 Healthcheck: http://localhost:${PORT}/api/v1/health`);
-  console.log(`====================================================`);
-});
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`====================================================`);
+    console.log(`🚀 StudyMind AI Multi-Provider Engine running on port ${PORT}`);
+    console.log(`🤖 Gemini Multimodal: Active for Long Docs, Vision & Structure`);
+    console.log(`⚡ Groq LPU Engine: Active for Fast Reasoning & Chat`);
+    console.log(`📡 Healthcheck: http://localhost:${PORT}/api/v1/health`);
+    console.log(`====================================================`);
+  });
+}
+
+export default app;

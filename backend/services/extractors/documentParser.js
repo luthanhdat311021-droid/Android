@@ -1,15 +1,30 @@
 import fs from 'fs';
 import path from 'path';
 import mammoth from 'mammoth';
-import Tesseract from 'tesseract.js';
-import { PDFParse } from 'pdf-parse';
+
+// Polyfill browser globals required by pdfjs-dist / pdf-parse v2 in Node.js serverless environment
+if (typeof globalThis.DOMMatrix === 'undefined') {
+  globalThis.DOMMatrix = class DOMMatrix {
+    constructor() {
+      this.a = 1; this.b = 0; this.c = 0; this.d = 1; this.e = 0; this.f = 0;
+    }
+  };
+}
+if (typeof globalThis.ImageData === 'undefined') {
+  globalThis.ImageData = class ImageData {};
+}
+if (typeof globalThis.Path2D === 'undefined') {
+  globalThis.Path2D = class Path2D {};
+}
 
 /**
- * Universal PDF Text Extractor supporting pdf-parse v2 API
+ * Universal PDF Text Extractor supporting pdf-parse v2 API safely
  */
 async function extractTextFromPdfBuffer(dataBuffer) {
-  if (typeof PDFParse === 'function') {
-    try {
+  try {
+    const pdfParseModule = await import('pdf-parse');
+    const PDFParse = pdfParseModule.PDFParse || pdfParseModule.default;
+    if (typeof PDFParse === 'function') {
       const uint8Array = new Uint8Array(dataBuffer);
       const parser = new PDFParse(uint8Array);
       const parsed = await parser.getText();
@@ -18,13 +33,14 @@ async function extractTextFromPdfBuffer(dataBuffer) {
         console.log(`✅ [Document Parser] Extracted ${text.trim().length} chars via PDFParse v2`);
         return text.trim();
       }
-    } catch (err1) {
-      console.warn(`⚠️ [Document Parser] PDFParser v2 error: ${err1.message}`);
     }
+  } catch (err1) {
+    console.warn(`⚠️ [Document Parser] PDFParser v2 error: ${err1.message}`);
   }
 
   return '';
 }
+
 
 /**
  * Sanitize and clean extracted PDF text
@@ -121,6 +137,8 @@ export async function parseDocumentContent(filePath, originalName, mimeType) {
   if (['.png', '.jpg', '.jpeg', '.webp', '.bmp'].includes(ext) || mimeType?.startsWith('image/')) {
     try {
       console.log(`📷 [Document Parser] Performing Tesseract OCR on image: ${originalName}...`);
+      const tesseractModule = await import('tesseract.js');
+      const Tesseract = tesseractModule.default || tesseractModule;
       const { data: { text } } = await Tesseract.recognize(filePath, 'eng+vie', {
         logger: m => console.log(`[OCR Progress] ${m.status}: ${(m.progress * 100).toFixed(0)}%`)
       });
